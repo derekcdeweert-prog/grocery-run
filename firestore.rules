@@ -1,0 +1,24 @@
+rules_version = '2';
+// Grocery Run: a list is readable and writable only by the email addresses in its "members".
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null && request.auth.token.email != null; }
+    function me() { return request.auth.token.email.lower(); }
+    function isMember(listId) {
+      return me() in get(/databases/$(database)/documents/lists/$(listId)).data.members;
+    }
+
+    match /lists/{listId} {
+      allow read: if signedIn() && me() in resource.data.members;
+      allow create: if signedIn() && request.resource.data.members == [me()];
+      allow update: if signedIn() && me() in resource.data.members
+                    && request.resource.data.members is list
+                    && request.resource.data.members.size() <= 10;
+      allow delete: if false;
+
+      match /items/{itemId} {
+        allow read, write: if signedIn() && isMember(listId);
+      }
+    }
+  }
+}

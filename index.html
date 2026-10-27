@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Grocery Run</title>
+<meta name="theme-color" content="#f5f7f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111611" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Groceries">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+:root {
+  --bg: #f5f7f2; --surface: #ffffff; --ink: #1d2a1f; --muted: #65725f; --line: #dde3d6;
+  --leaf: #2f6b3a; --leaf-ink: #ffffff; --leaf-soft: #e3eedf; --tomato: #c8452f;
+  --sign: #23402a; --sign-ink: #f1f6ec;
+  --font-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --font-body: "Figtree", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --r: 14px; color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111611; --surface: #1a211a; --ink: #e8eee3; --muted: #9aa894; --line: #2c372b;
+    --leaf: #7cc58a; --leaf-ink: #0f1a11; --leaf-soft: #213325; --tomato: #ef7a63;
+    --sign: #2b4a32; --sign-ink: #e9f3e4; color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { background: var(--bg); margin: 0; }
+body { color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.45; -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+[hidden] { display: none !important; }
+.wrap {
+  max-width: 560px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+}
+header.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: var(--bg); padding-block: 18px 12px; display: grid; gap: 12px;
+  border-bottom: 1px solid var(--line);
+}
+body { padding-top: env(safe-area-inset-top, 0px); }
+.titlerow { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+h1 { font-family: var(--font-display); font-weight: 800; font-size: 1.9rem; letter-spacing: -0.02em; margin: 0; line-height: 1; display: flex; align-items: center; gap: 10px; }
+.logo { flex: none; width: 40px; height: 40px; border-radius: 11px; background: var(--leaf); color: var(--leaf-ink); display: grid; place-items: center; }
+.logo svg { width: 26px; height: 26px; }
+.right { display: flex; align-items: center; gap: 6px; }
+.count { color: var(--muted); font-size: .9rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.iconbtn { width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.iconbtn svg { width: 20px; height: 20px; }
+
+.modes { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px; }
+.modes button { font: 600 .95rem var(--font-body); border: 0; background: transparent; color: var(--muted); padding: 9px 8px; border-radius: 999px; cursor: pointer; }
+.modes button[aria-pressed="true"] { background: var(--leaf); color: var(--leaf-ink); }
+
+form.say { display: flex; gap: 8px; }
+input[type=text], input[type=email], input[type=password] {
+  flex: 1; min-width: 0; font: 500 1.05rem var(--font-body); color: var(--ink);
+  background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--r); padding: 13px 14px; width: 100%;
+}
+input:focus { outline: none; border-color: var(--leaf); }
+.btn { font: 700 1rem var(--font-body); background: var(--leaf); color: var(--leaf-ink); border: 0; border-radius: var(--r); padding: 13px 18px; cursor: pointer; }
+.btn.ghost { background: var(--surface); color: var(--ink); border: 1.5px solid var(--line); }
+.btn:disabled { opacity: .5; }
+.hint { margin: 0; color: var(--muted); font-size: .85rem; }
+.hint b { color: var(--ink); font-weight: 600; }
+
+.notice { margin: 16px 0 0; padding: 12px 14px; border-radius: var(--r); background: var(--leaf-soft); font-size: .92rem; }
+
+section.aisle { margin-top: 22px; }
+.sign { display: inline-flex; align-items: center; gap: 8px; background: var(--sign); color: var(--sign-ink); font: 700 .72rem var(--font-body); letter-spacing: .09em; text-transform: uppercase; padding: 5px 10px 5px 6px; border-radius: 6px; margin-bottom: 8px; }
+.sign .no { background: var(--sign-ink); color: var(--sign); border-radius: 4px; padding: 1px 6px; font-variant-numeric: tabular-nums; }
+ul.items { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+ul.items li { display: flex; align-items: center; gap: 12px; padding: 4px 6px 4px 12px; border-top: 1px solid var(--line); }
+ul.items li:first-child { border-top: 0; }
+.check { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--leaf); background: transparent; cursor: pointer; display: grid; place-items: center; color: var(--leaf-ink); padding: 0; }
+.check svg { width: 16px; height: 16px; opacity: 0; }
+li.bought .check { background: var(--leaf); }
+li.bought .check svg { opacity: 1; }
+.label { flex: 1; min-width: 0; padding-block: 10px; cursor: pointer; }
+.name { font-weight: 600; overflow-wrap: anywhere; }
+.meta { color: var(--muted); font-size: .8rem; }
+li.bought .name { text-decoration: line-through; text-decoration-color: var(--tomato); text-decoration-thickness: 2px; color: var(--muted); }
+.x { flex: none; width: 40px; height: 40px; border: 0; background: transparent; color: var(--muted); font-size: 1.3rem; cursor: pointer; border-radius: 10px; }
+
+.cart-head { display: flex; justify-content: space-between; align-items: center; margin-top: 30px; }
+.cart-head .sign { background: var(--tomato); color: var(--surface); margin: 0; }
+.linkbtn { font: 600 .9rem var(--font-body); color: var(--tomato); background: none; border: 0; cursor: pointer; padding: 8px 0; }
+.cart-head + ul.items { margin-top: 8px; }
+
+.empty { text-align: center; padding: 48px 12px 24px; color: var(--muted); }
+.empty h2 { font-family: var(--font-display); font-weight: 600; color: var(--ink); font-size: 1.3rem; margin: 0 0 6px; text-wrap: balance; }
+.empty p { margin: 0 auto; max-width: 32ch; }
+.empty .eg { margin-top: 14px; display: inline-block; background: var(--surface); border: 1px dashed var(--line); padding: 8px 12px; border-radius: 10px; color: var(--ink); }
+
+/* Sign-in screen */
+.gate { min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px calc(24px + env(safe-area-inset-bottom, 0px)); }
+.card { width: min(400px, 100%); display: grid; gap: 14px; }
+.card h1 { font-size: 2.2rem; }
+.card p { margin: 0; color: var(--muted); }
+.card form { display: grid; gap: 10px; }
+.or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: .85rem; }
+.or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.err { color: var(--tomato); font-size: .9rem; min-height: 1.2em; }
+.small { font-size: .85rem; }
+.g { display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
+.g svg { width: 18px; height: 18px; }
+
+/* Share sheet */
+dialog { border: 0; border-radius: 20px 20px 0 0; padding: 20px max(16px, env(safe-area-inset-left)) calc(20px + env(safe-area-inset-bottom, 0px)); width: 100%; max-width: 560px; margin: auto auto 0; background: var(--bg); color: var(--ink); }
+dialog::backdrop { background: rgb(0 0 0 / .35); }
+dialog h2 { font-family: var(--font-display); margin: 0 0 4px; font-size: 1.4rem; }
+dialog .row { display: flex; gap: 8px; }
+.members { list-style: none; padding: 0; margin: 12px 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.members li { padding: 12px 14px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.members li:first-child { border-top: 0; }
+.sheet-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; gap: 8px; }
+
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 20; width: min(520px, calc(100% - 32px)); background: var(--ink); color: var(--bg); border-radius: var(--r); padding: 12px 14px; display: flex; gap: 12px; align-items: center; justify-content: space-between; box-shadow: 0 8px 24px rgb(0 0 0 / .18); font-size: .95rem; }
+.toast button { font: 700 .95rem var(--font-body); background: none; border: 0; color: var(--leaf-soft); cursor: pointer; padding: 4px 2px; }
+button:focus-visible, .label:focus-visible { outline: 2px solid var(--leaf); outline-offset: 2px; }
+@media (prefers-reduced-motion: no-preference) {
+  ul.items li { transition: background .2s; }
+  .toast { animation: rise .18s ease-out; }
+  @keyframes rise { from { transform: translate(-50%, 8px); opacity: 0; } }
+}
+</style>
+</head>
+<body>
+
+<!-- Sign-in -->
+<div class="gate" id="gate" hidden>
+  <div class="card">
+    <h1><span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3.5h2.6l2.3 11.2a1.6 1.6 0 0 0 1.6 1.3h8.6a1.6 1.6 0 0 0 1.6-1.2L21 7.5H6.1"/><circle cx="9.5" cy="20" r="1.4" fill="currentColor" stroke="none"/><circle cx="17.5" cy="20" r="1.4" fill="currentColor" stroke="none"/></svg></span>Grocery Run</h1>
+    <p>One shopping list for the whole house. Sign in to see it.</p>
+    <button class="btn ghost g" id="google" type="button"><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-17.1z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>Continue with Google</button>
+    <div class="or">or with email</div>
+    <form id="email-form">
+      <input type="email" id="email" placeholder="Email" autocomplete="email" required>
+      <input type="password" id="password" placeholder="Password (6+ characters)" autocomplete="current-password" required minlength="6">
+      <button class="btn" type="submit" id="email-btn">Sign in</button>
+    </form>
+    <button class="linkbtn small" id="email-toggle" type="button" style="color:var(--leaf);justify-self:start">New here? Create an account</button>
+    <div class="err" id="auth-err" role="alert"></div>
+  </div>
+</div>
+
+<!-- App -->
+<div class="wrap" id="app" hidden>
+  <header class="top">
+    <div class="titlerow">
+      <h1><span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3.5h2.6l2.3 11.2a1.6 1.6 0 0 0 1.6 1.3h8.6a1.6 1.6 0 0 0 1.6-1.2L21 7.5H6.1"/><circle cx="9.5" cy="20" r="1.4" fill="currentColor" stroke="none"/><circle cx="17.5" cy="20" r="1.4" fill="currentColor" stroke="none"/></svg></span>Grocery Run</h1>
+      <div class="right">
+        <span class="count" id="count"></span>
+        <button class="iconbtn" id="share-open" type="button" aria-label="Share list and account"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M19 8v6M16 11h6"/></svg></button>
+      </div>
+    </div>
+    <div class="modes" role="group" aria-label="Mode">
+      <button type="button" id="mode-add" aria-pressed="true">Adding</button>
+      <button type="button" id="mode-shop" aria-pressed="false">At the store</button>
+    </div>
+    <form class="say" id="say" autocomplete="off">
+      <input id="say-input" type="text" enterkeyhint="done" placeholder="Milk, eggs and bread" aria-label="Items">
+      <button class="btn" type="submit" id="say-btn">Add</button>
+    </form>
+    <p class="hint" id="hint">Tap the box, then the <b>mic</b> on your keyboard and say what you need.</p>
+  </header>
+  <div id="notice" class="notice" hidden></div>
+  <main id="list" aria-live="polite"><div class="empty"><h2>Loading your list…</h2></div></main>
+</div>
+
+<dialog id="share">
+  <h2>Share this list</h2>
+  <p class="hint">Add your partner's email. They sign in with that address and see the same list, live.</p>
+  <ul class="members" id="members"></ul>
+  <form class="row" id="invite">
+    <input type="email" id="invite-email" placeholder="partner@gmail.com" required>
+    <button class="btn" type="submit">Add</button>
+  </form>
+  <div class="err" id="invite-err"></div>
+  <div class="sheet-foot">
+    <span class="hint" id="whoami"></span>
+    <div class="row">
+      <button class="btn ghost" id="signout" type="button">Sign out</button>
+      <button class="btn" id="share-close" type="button">Done</button>
+    </div>
+  </div>
+</dialog>
+
+<div id="toast" class="toast" hidden role="status"><span id="toast-msg"></span><button type="button" id="toast-undo">Undo</button></div>
+
+<script src="config.js"></script>
+<script type="module">
+const SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
+const $ = (id) => document.getElementById(id);
+
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+
+/* ---------- list logic (aisles, speech parsing, matching) ---------- */
+// Store-walk order, so the list reads in the order you pass the shelves.
+const AISLES = ["Produce", "Bakery", "Meat & fish", "Dairy & eggs", "Pantry", "Frozen", "Drinks", "Household", "Other"];
+const RULES = [
+  ["Frozen", /\b(frozen|ice cream|popsicles?|ice)\b/],
+  ["Pantry", /\b(peanut butter|almond butter|tomato (sauce|paste)|canned|beans?|rice|pasta|spaghetti|noodles?|flour|sugar|oil|vinegar|cereal|oats?|oatmeal|sauce|soups?|salt|pepper flakes|spices?|cinnamon|coffee|tea|honey|jam|jelly|syrup|crackers?|chips|snacks?|nuts|almonds|ketchup|mustard|mayo|mayonnaise|broth|stock|baking|granola|tuna|salsa|popcorn|chocolate|cookies)\b/],
+  ["Produce", /\b(apples?|bananas?|lettuce|tomato(es)?|onions?|garlic|potato(es)?|carrots?|avocados?|lemons?|limes?|berries|strawberries|blueberries|raspberries|spinach|cucumbers?|peppers?|broccoli|celery|grapes|oranges?|mushrooms?|herbs|cilantro|parsley|basil|kale|zucchini|fruit|salad|ginger|eggplants?|cabbage|corn|peaches|pears?|melon|watermelon|squash|scallions?|green onions?|cauliflower|asparagus|beets?)\b/],
+  ["Bakery", /\b(bread|bagels?|buns?|rolls?|tortillas?|croissants?|muffins?|cake|baguettes?|pita|naan|sourdough)\b/],
+  ["Meat & fish", /\b(chicken|beef|pork|turkey|bacon|sausages?|ham|salmon|fish|shrimp|steaks?|ground|mince|lamb|cod|tilapia|hot dogs?|deli|salami)\b/],
+  ["Dairy & eggs", /\b(milk|eggs?|cheese|cheddar|mozzarella|parmesan|yogh?urt|butter|cream|sour cream|cottage|half and half)\b/],
+  ["Drinks", /\b(water|juice|soda|pop|beer|wine|sparkling|kombucha|seltzer|lemonade|coke)\b/],
+  ["Household", /\b(paper towels?|toilet paper|tp|soap|detergent|dish|trash bags?|garbage bags?|foil|plastic wrap|cling|shampoo|conditioner|toothpaste|tissues?|kleenex|sponges?|diapers?|wipes|batteries|cleaner|bleach|napkins?|ziploc|razors?|deodorant)\b/],
+];
+const aisleFor = (name) => { const n = name.toLowerCase(); for (const [a, re] of RULES) if (re.test(n)) return a; return "Other"; };
+const KEEP = ["mac and cheese", "salt and pepper", "half and half", "peanut butter and jelly", "sour cream and onion", "chips and salsa", "fish and chips"];
+function splitItems(text) {
+  let t = " " + text.toLowerCase().replace(/[.!?]+/g, " ") + " ";
+  KEEP.forEach((k, i) => { t = t.split(k).join(`§${i}§`); });
+  return t.split(/,|;|\n|\band also\b|\band\b|&|\bplus\b|\balso\b/)
+    .map((s) => s.replace(/§(\d+)§/g, (_, i) => KEEP[+i]).trim())
+    .map((s) => s.replace(/^(some|a few|a couple of|a|an|the|more)\s+/, "").replace(/\s+(too|as well|please)$/, "").trim())
+    .filter((s) => s && s.length < 80);
+}
+const ADD_LEAD = /^\s*(hey\s+)?(please\s+)?(can you\s+|could you\s+)?(add|put|we need|we're out of|we are out of|i need|need|get|buy|grab|remember)\s+/i;
+const ADD_TAIL = /\s+(to|on|onto)\s+(the|our|my)?\s*(grocery|groceries|shopping)?\s*list\s*[.!]?\s*$/i;
+const BOUGHT_LEAD = /^\s*(ok(ay)?,?\s+)?(i\s+|we\s+)?(got|bought|picked up|grabbed|found|have|checked off|check off|cross off|remove|done with)\s+/i;
+const BOUGHT_TAIL = /\s+(already|in the cart|in my cart|off the list|from the list)\s*[.!]?\s*$/i;
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const keyOf = (s) => s.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/^\d+\s+/, "")
+  .split(/\s+/).filter(Boolean).map((w) => w.replace(/(ies)$/, "y").replace(/(oes|ses|xes|ches|shes)$/, (m) => m.slice(0, -2)).replace(/s$/, "")).join(" ");
+function lev(a, b) {
+  const d = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) { let prev = d[0]; d[0] = i;
+    for (let j = 1; j <= b.length; j++) { const t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = t; } }
+  return d[b.length];
+}
+function findItem(spoken, pool) {
+  const k = keyOf(spoken); if (!k) return null;
+  let hit = pool.find((it) => keyOf(it.name) === k); if (hit) return hit;
+  hit = pool.find((it) => { const ik = keyOf(it.name); return ik.includes(k) || k.includes(ik); }); if (hit) return hit;
+  let best = null, bestD = Infinity;
+  for (const it of pool) { const dd = lev(k, keyOf(it.name)); if (dd < bestD) { bestD = dd; best = it; } }
+  return best && bestD <= Math.max(1, Math.floor(k.length / 4)) ? best : null;
+}
+const findExact = (p, pool) => pool.find((it) => keyOf(it.name) === keyOf(p));
+
+/* ---------- storage backends ---------- */
+// Both expose: me {uid,name,email}, subscribe(cb, onErr), create(data), update(id,patch), set(id,data), remove(id),
+// members(), invite(email), signOut()
+
+function demoStore() {
+  const docs = new Map(); let cb = () => {}; let n = 0;
+  const emit = () => cb([...docs].map(([id, d]) => ({ id, ...d })));
+  const mem = ["you@example.com"];
+  return {
+    demo: true, me: { uid: "me", name: "You", email: "you@example.com" },
+    subscribe(f) { cb = f; emit(); },
+    async create(d) { const id = "d" + (++n); docs.set(id, d); emit(); return id; },
+    async update(id, p) { docs.set(id, { ...docs.get(id), ...p }); emit(); },
+    async set(id, d) { docs.set(id, d); emit(); },
+    async remove(id) { docs.delete(id); emit(); },
+    async removeMany(ids) { ids.forEach((id) => docs.delete(id)); emit(); },
+    async members() { return mem; },
+    async invite(e) { if (!mem.includes(e)) mem.push(e); },
+    async signOut() { location.reload(); },
+  };
+}
+
+async function firebaseStore(config, showGate) {
+  const [{ initializeApp }, A, F] = await Promise.all([
+    import(SDK + "firebase-app.js"), import(SDK + "firebase-auth.js"), import(SDK + "firebase-firestore.js"),
+  ]);
+  const app = initializeApp(config);
+  const auth = A.getAuth(app);
+  await A.setPersistence(auth, A.browserLocalPersistence);
+  let db;
+  try { db = F.initializeFirestore(app, { localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }) }); }
+  catch { db = F.getFirestore(app); }
+
+  // Wait for a signed-in user, showing the sign-in screen if needed.
+  const user = await new Promise((resolve) => {
+    let shown = false;
+    A.onAuthStateChanged(auth, (u) => {
+      if (u && u.email) { $("gate").hidden = true; resolve(u); }
+      else if (!shown) { shown = true; showGate(auth, A); }
+    });
+  });
+
+  const email = user.email.toLowerCase();
+  const first = (user.displayName || email.split("@")[0]).split(" ")[0];
+  const me = { uid: user.uid, name: cap(first), email };
+
+  // Find my list: prefer one shared with someone else, otherwise make one.
+  const listsCol = F.collection(db, "lists");
+  const snap = await F.getDocs(F.query(listsCol, F.where("members", "array-contains", email)));
+  let lists = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  lists.sort((a, b) => (b.members.length - a.members.length) || ((a.createdAt || 0) - (b.createdAt || 0)));
+  let listId = lists[0]?.id;
+  if (!listId) {
+    const ref = F.doc(listsCol);
+    await F.setDoc(ref, { members: [email], owner: email, createdAt: Date.now() });
+    listId = ref.id;
+  }
+  const listRef = F.doc(db, "lists", listId);
+  const items = F.collection(listRef, "items");
+
+  return {
+    me,
+    subscribe(f, onErr) { F.onSnapshot(items, (s) => f(s.docs.map((d) => ({ id: d.id, ...d.data() }))), onErr); },
+    async create(d) { const ref = F.doc(items); await F.setDoc(ref, d); return ref.id; },
+    update: (id, p) => F.updateDoc(F.doc(items, id), p),
+    set: (id, d) => F.setDoc(F.doc(items, id), d),
+    remove: (id) => F.deleteDoc(F.doc(items, id)),
+    async removeMany(ids) { const b = F.writeBatch(db); ids.forEach((id) => b.delete(F.doc(items, id))); await b.commit(); },
+    async members() { return (await F.getDoc(listRef)).data()?.members || [email]; },
+    invite: (e) => F.updateDoc(listRef, { members: F.arrayUnion(e.toLowerCase()) }),
+    signOut: () => A.signOut(auth).then(() => location.reload()),
+  };
+}
+
+/* ---------- sign-in screen ---------- */
+function showGate(auth, A) {
+  $("gate").hidden = false;
+  let creating = false;
+  const err = (e) => {
+    const c = e?.code || "";
+    $("auth-err").textContent =
+      c.includes("invalid-credential") || c.includes("wrong-password") || c.includes("user-not-found") ? "That email and password don't match. New here? Create an account below." :
+      c.includes("email-already-in-use") ? "There's already an account with that email. Sign in instead." :
+      c.includes("weak-password") ? "Pick a password of at least 6 characters." :
+      c.includes("popup-closed") || c.includes("cancelled-popup") ? "" :
+      c.includes("popup-blocked") || c.includes("operation-not-supported") || c.includes("web-storage") ? "Google sign-in didn't open here. Use email and password instead." :
+      c.includes("unauthorized-domain") ? "This web address isn't allowed yet in Firebase (Authentication → Settings → Authorized domains)." :
+      c.includes("network") ? "No connection. Try again when you're online." :
+      "Sign-in didn't work (" + (c || e?.message || "unknown") + ").";
+  };
+  $("google").onclick = async () => {
+    $("auth-err").textContent = "";
+    try { await A.signInWithPopup(auth, new A.GoogleAuthProvider()); } catch (e) { err(e); }
+  };
+  $("email-toggle").onclick = () => {
+    creating = !creating;
+    $("email-btn").textContent = creating ? "Create account" : "Sign in";
+    $("email-toggle").textContent = creating ? "Already have an account? Sign in" : "New here? Create an account";
+    $("password").autocomplete = creating ? "new-password" : "current-password";
+  };
+  $("email-form").onsubmit = async (e) => {
+    e.preventDefault(); $("auth-err").textContent = "";
+    const em = $("email").value.trim(), pw = $("password").value;
+    try { creating ? await A.createUserWithEmailAndPassword(auth, em, pw) : await A.signInWithEmailAndPassword(auth, em, pw); }
+    catch (x) { err(x); }
+  };
+}
+
+/* ---------- app ---------- */
+let store, items = [], mode = "add";
+const list = $("list");
+
+function setMode(m) {
+  mode = m;
+  $("mode-add").setAttribute("aria-pressed", m === "add");
+  $("mode-shop").setAttribute("aria-pressed", m === "shop");
+  $("say-btn").textContent = m === "add" ? "Add" : "Got it";
+  $("say-input").placeholder = m === "add" ? "Milk, eggs and bread" : "I got the milk and bananas";
+  $("hint").innerHTML = m === "add"
+    ? "Tap the box, then the <b>mic</b> on your keyboard and say what you need."
+    : "Say what went in the cart, or tap an item to check it off.";
+}
+$("mode-add").onclick = () => setMode("add");
+$("mode-shop").onclick = () => setMode("shop");
+
+let toastTimer = null;
+function toast(msg, undo) {
+  $("toast-msg").textContent = msg;
+  $("toast-undo").hidden = !undo;
+  $("toast-undo").onclick = async () => { $("toast").hidden = true; if (undo) await undo(); };
+  $("toast").hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { $("toast").hidden = true; }, undo ? 6000 : 3500);
+}
+function notice(text) { $("notice").textContent = text; $("notice").hidden = !text; }
+
+// Writes are applied locally right away and synced when there's signal, so we don't wait on them.
+function write(p) {
+  Promise.resolve(p).catch((e) => {
+    if (e?.code === "permission-denied") notice("You don't have access to this list anymore. Ask the owner to add your email again.");
+    else toast("That didn't save. Check your connection and try again.");
+  });
+  return true;
+}
+
+const stamp = (prefix) => ({ [prefix + "At"]: Date.now(), [prefix + "By"]: store.me.uid, [prefix + "ByName"]: store.me.name });
+const unbought = { bought: false, boughtAt: null, boughtBy: null, boughtByName: null };
+
+async function addItems(text) {
+  const parts = splitItems(text.replace(ADD_LEAD, "").replace(ADD_TAIL, ""));
+  if (!parts.length) return;
+  const added = [], dupes = [], names = [];
+  for (const p of parts) {
+    const existing = findExact(p, items);
+    if (existing && !existing.bought) { dupes.push(existing.name); continue; }
+    if (existing) { write(store.update(existing.id, { ...unbought, ...stamp("added") })); names.push(existing.name); continue; }
+    const name = cap(p);
+    const id = await store.create({ name, aisle: aisleFor(name), ...stamp("added"), ...unbought }).catch(() => null);
+    if (id) { added.push(id); names.push(name); }
+  }
+  const n = names.length;
+  const msg = [n ? `Added ${n <= 3 ? names.join(", ") : n + " items"}` : "",
+    dupes.length ? `${dupes.join(", ")} ${dupes.length === 1 ? "is" : "are"} already on the list` : ""].filter(Boolean).join(". ");
+  toast(msg || "Nothing new to add", added.length ? () => write(store.removeMany(added)) : null);
+}
+
+function markBought(text) {
+  const parts = splitItems(text.replace(BOUGHT_LEAD, "").replace(BOUGHT_TAIL, ""));
+  const got = [], missing = [];
+  for (const p of parts) {
+    const hit = findItem(p, items.filter((i) => !i.bought && !got.includes(i)));
+    if (hit) got.push(hit); else missing.push(cap(p));
+  }
+  for (const it of got) write(store.update(it.id, { bought: true, ...stamp("bought") }));
+  const msg = [got.length ? `Checked off ${got.map((g) => g.name).join(", ")}` : "",
+    missing.length ? `Not on the list: ${missing.join(", ")}` : ""].filter(Boolean).join(". ");
+  toast(msg || "Nothing matched", got.length ? () => got.forEach((it) => write(store.update(it.id, unbought))) : null);
+}
+
+$("say").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = $("say-input"), text = input.value.trim();
+  if (!text || !store) return;
+  input.value = "";
+  // "I got the milk" checks it off even in Adding mode; "add bread" adds even at the store.
+  if (BOUGHT_LEAD.test(text)) markBought(text);
+  else if (ADD_LEAD.test(text) || mode === "add") await addItems(text);
+  else markBought(text);
+});
+
+function toggle(it) { write(store.update(it.id, it.bought ? unbought : { bought: true, ...stamp("bought") })); }
+function removeItem(it) {
+  const { id, ...body } = it;
+  write(store.remove(id));
+  toast(`Removed ${it.name}`, () => write(store.set(id, body)));
+}
+function clearCart() {
+  const cart = items.filter((i) => i.bought);
+  write(store.removeMany(cart.map((i) => i.id)));
+  toast(`Cleared ${cart.length} item${cart.length === 1 ? "" : "s"} from the cart`);
+}
+
+const ago = (t) => {
+  const m = Math.round((Date.now() - t) / 60000);
+  if (m < 1) return "just now"; if (m < 60) return m + " min ago";
+  const h = Math.round(m / 60); if (h < 24) return h + " h ago";
+  const d = Math.round(h / 24); return d === 1 ? "yesterday" : d + " days ago";
+};
+const CHECK = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>';
+const whoName = (uid, name) => (uid && uid === store.me.uid ? "you" : name || "");
+
+function row(it) {
+  const li = document.createElement("li");
+  if (it.bought) li.className = "bought";
+  const b = document.createElement("button");
+  b.className = "check"; b.type = "button"; b.innerHTML = CHECK;
+  b.setAttribute("aria-label", (it.bought ? "Put back on list: " : "Check off: ") + it.name);
+  b.onclick = () => toggle(it);
+  const lab = document.createElement("div"); lab.className = "label"; lab.onclick = () => toggle(it);
+  const nm = document.createElement("div"); nm.className = "name"; nm.textContent = it.name;
+  const meta = document.createElement("div"); meta.className = "meta";
+  const who = it.bought ? whoName(it.boughtBy, it.boughtByName) : whoName(it.addedBy, it.addedByName);
+  const t = it.bought ? it.boughtAt : it.addedAt;
+  meta.textContent = (it.bought ? "Got " : "Added ") + (who ? "by " + who + " · " : "") + (t ? ago(t) : "");
+  lab.append(nm, meta);
+  const x = document.createElement("button");
+  x.className = "x"; x.type = "button"; x.textContent = "×"; x.setAttribute("aria-label", "Remove " + it.name);
+  x.onclick = () => removeItem(it);
+  li.append(b, lab, x);
+  return li;
+}
+
+function render() {
+  const open = items.filter((i) => !i.bought);
+  const cart = items.filter((i) => i.bought).sort((a, b) => (b.boughtAt || 0) - (a.boughtAt || 0));
+  $("count").textContent = open.length ? `${open.length} to get` : "";
+  list.replaceChildren();
+  if (!items.length) {
+    list.innerHTML = '<div class="empty"><h2>The list is empty</h2><p>Add what you need and it shows up here and on your partner\'s phone right away.</p><span class="eg">“Add bananas, oat milk and coffee”</span></div>';
+    return;
+  }
+  if (!open.length) {
+    const e = document.createElement("div"); e.className = "empty";
+    e.innerHTML = "<h2>Everything's in the cart</h2><p>Nice run. Clear the cart below when you're home.</p>";
+    list.append(e);
+  }
+  let n = 0;
+  for (const aisle of AISLES) {
+    const inAisle = open.filter((i) => (AISLES.includes(i.aisle) ? i.aisle : "Other") === aisle).sort((a, b) => a.addedAt - b.addedAt);
+    if (!inAisle.length) continue;
+    n++;
+    const sec = document.createElement("section"); sec.className = "aisle";
+    const sign = document.createElement("div"); sign.className = "sign";
+    sign.innerHTML = `<span class="no">${n}</span>`; sign.append(aisle);
+    const ul = document.createElement("ul"); ul.className = "items";
+    inAisle.forEach((it) => ul.append(row(it)));
+    sec.append(sign, ul); list.append(sec);
+  }
+  if (cart.length) {
+    const head = document.createElement("div"); head.className = "cart-head";
+    const sign = document.createElement("div"); sign.className = "sign"; sign.textContent = `In the cart · ${cart.length}`;
+    const clr = document.createElement("button"); clr.className = "linkbtn"; clr.type = "button"; clr.textContent = "Clear cart"; clr.onclick = clearCart;
+    head.append(sign, clr);
+    const ul = document.createElement("ul"); ul.className = "items";
+    cart.forEach((it) => ul.append(row(it)));
+    list.append(head, ul);
+  }
+}
+
+/* ---------- share sheet ---------- */
+async function openShare() {
+  $("invite-err").textContent = "";
+  $("whoami").textContent = store.demo ? "Demo mode" : "Signed in as " + store.me.email;
+  const ms = await store.members().catch(() => [store.me.email]);
+  $("members").replaceChildren(...ms.map((m) => { const li = document.createElement("li"); li.textContent = m + (m === store.me.email ? " (you)" : ""); return li; }));
+  $("share").showModal();
+}
+$("share-open").onclick = openShare;
+$("share-close").onclick = () => $("share").close();
+$("signout").onclick = () => store.signOut();
+$("invite").onsubmit = async (e) => {
+  e.preventDefault();
+  const em = $("invite-email").value.trim().toLowerCase();
+  try { await store.invite(em); $("invite-email").value = ""; toast(`${em} can now open this list`); openShare(); }
+  catch { $("invite-err").textContent = "Couldn't add that email. Check your connection and try again."; }
+};
+
+/* ---------- start ---------- */
+async function start() {
+  const cfg = window.FIREBASE_CONFIG || {};
+  if (!cfg.apiKey) {
+    store = demoStore();
+    notice("Demo mode: Firebase isn't set up yet, so this list only lives in this tab.");
+  } else {
+    try { store = await firebaseStore(cfg, showGate); }
+    catch (e) {
+      $("gate").hidden = true; $("app").hidden = false;
+      list.innerHTML = '<div class="empty"><h2>Couldn\'t open the list</h2><p>' + (navigator.onLine ? "Check the Firebase setup and reload." : "You're offline. Open the app once with signal to sign in.") + "</p></div>";
+      console.error(e); return;
+    }
+  }
+  $("app").hidden = false;
+  store.subscribe((docs) => { items = docs; render(); },
+    () => notice("Lost the live connection to the list. Reload the app to reconnect."));
+  setInterval(render, 60000); // keep "5 min ago" fresh
+}
+start();
+</script>
+</body>
+</html>
