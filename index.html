@@ -77,6 +77,24 @@ input:focus { outline: none; border-color: var(--leaf); }
   .mic.on { animation: pulse 1.2s ease-in-out infinite; }
   @keyframes pulse { 50% { box-shadow: 0 0 0 8px rgb(200 69 47 / .25); } }
 }
+/* Meal carousel */
+.meals-row { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x proximity; margin-inline: -16px; padding: 2px 16px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.meals-row::-webkit-scrollbar { display: none; }
+.meal-chip { flex: none; scroll-snap-align: start; display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 9px 14px; font: 600 .95rem var(--font-body); cursor: pointer; white-space: nowrap; }
+.meal-chip .n { background: var(--leaf-soft); color: var(--leaf); border-radius: 999px; padding: 0 7px; font-size: .78rem; font-variant-numeric: tabular-nums; }
+.meal-chip.edit { border-style: dashed; color: var(--muted); background: transparent; }
+li.add .check { background: var(--leaf); }
+li.add .check svg { opacity: 1; }
+li.have .name { text-decoration: line-through; text-decoration-color: var(--tomato); text-decoration-thickness: 2px; color: var(--muted); }
+li.onlist .check { border-color: var(--line); cursor: default; }
+li.onlist .name { color: var(--muted); }
+li.onlist .label { cursor: default; }
+dialog { max-height: 88dvh; overflow-y: auto; }
+dialog form.stack { display: grid; gap: 10px; margin-top: 12px; }
+dialog label { font-weight: 600; font-size: .9rem; }
+textarea { font: 500 1.05rem var(--font-body); color: var(--ink); background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--r); padding: 12px 14px; width: 100%; min-height: 170px; resize: vertical; }
+textarea:focus { outline: none; border-color: var(--leaf); }
+dialog ul.items { margin-top: 12px; }
 .say .btn.add { background: var(--surface); color: var(--leaf); border: 1.5px solid var(--line); }
 .hint { margin: 0; color: var(--muted); font-size: .85rem; }
 .hint b { color: var(--ink); font-weight: 600; }
@@ -181,6 +199,7 @@ button:focus-visible, .label:focus-visible { outline: 2px solid var(--leaf); out
       <button class="btn add" type="submit" id="say-btn">Add</button>
     </form>
     <p class="hint" id="hint">Tap the <b>mic</b> and say what you need, like “milk, eggs and bread”.</p>
+    <div class="meals-row" id="meals-row" role="group" aria-label="Meals"></div>
   </header>
   <div id="notice" class="notice" hidden></div>
   <main id="list" aria-live="polite"><div class="empty"><h2>Loading your list…</h2></div></main>
@@ -204,6 +223,8 @@ button:focus-visible, .label:focus-visible { outline: 2px solid var(--leaf); out
   </div>
 </dialog>
 
+<dialog id="meal-dlg" aria-label="Meal"></dialog>
+
 <div id="toast" class="toast" hidden role="status"><span id="toast-msg"></span><button type="button" id="toast-undo">Undo</button></div>
 
 <script src="config.js"></script>
@@ -221,7 +242,7 @@ const AISLES = ["Produce", "Bakery", "Meat & fish", "Dairy & eggs", "Pantry", "F
 const RULES = [
   ["Frozen", /\b(frozen|ice cream|popsicles?|ice)\b/],
   ["Pantry", /\b(peanut butter|almond butter|tomato (sauce|paste)|canned|beans?|rice|pasta|spaghetti|noodles?|flour|sugar|oil|vinegar|cereal|oats?|oatmeal|sauce|soups?|salt|pepper flakes|spices?|cinnamon|coffee|tea|honey|jam|jelly|syrup|crackers?|chips|snacks?|nuts|almonds|ketchup|mustard|mayo|mayonnaise|broth|stock|baking|granola|tuna|salsa|popcorn|chocolate|cookies)\b/],
-  ["Produce", /\b(apples?|bananas?|lettuce|tomato(es)?|onions?|garlic|potato(es)?|carrots?|avocados?|lemons?|limes?|berries|strawberries|blueberries|raspberries|spinach|cucumbers?|peppers?|broccoli|celery|grapes|oranges?|mushrooms?|herbs|cilantro|parsley|basil|kale|zucchini|fruit|salad|ginger|eggplants?|cabbage|corn|peaches|pears?|melon|watermelon|squash|scallions?|green onions?|cauliflower|asparagus|beets?)\b/],
+  ["Produce", /\b(apples?|bananas?|lettuce|tomato(es)?|onions?|garlic|potato(es)?|carrots?|avocados?|lemons?|limes?|berries|strawberries|blueberries|raspberries|spinach|cucumbers?|peppers?|broccoli|celery|grapes|oranges?|mushrooms?|herbs|cilantro|parsley|basil|kale|zucchini|fruit|salad|ginger|eggplants?|cabbage|corn|peaches|pears?|melon|watermelon|squash|scallions?|green onions?|cauliflower|asparagus|beets?|vegetables|veggies|greens|leeks?)\b/],
   ["Bakery", /\b(bread|bagels?|buns?|rolls?|tortillas?|croissants?|muffins?|cake|baguettes?|pita|naan|sourdough)\b/],
   ["Meat & fish", /\b(chicken|beef|pork|turkey|bacon|sausages?|ham|salmon|fish|shrimp|steaks?|ground|mince|lamb|cod|tilapia|hot dogs?|deli|salami)\b/],
   ["Dairy & eggs", /\b(milk|eggs?|cheese|cheddar|mozzarella|parmesan|yogh?urt|butter|cream|sour cream|cottage|half and half)\b/],
@@ -269,7 +290,10 @@ function demoStore() {
   const docs = new Map(); let cb = () => {}; let n = 0;
   const emit = () => cb([...docs].map(([id, d]) => ({ id, ...d })));
   const mem = ["you@example.com"];
+  let meals, mealCb = () => {};
   return {
+    subscribeMeals(f) { mealCb = f; f(meals); },
+    async saveMeals(m) { meals = m; mealCb(meals); },
     demo: true, me: { uid: "me", name: "You", email: "you@example.com" },
     subscribe(f) { cb = f; emit(); },
     async create(d) { const id = "d" + (++n); docs.set(id, d); emit(); return id; },
@@ -323,6 +347,9 @@ async function firebaseStore(config, showGate) {
 
   return {
     me,
+    // Meals live on the list document itself, so both partners share them.
+    subscribeMeals(f) { F.onSnapshot(listRef, (s) => f(s.data()?.meals)); },
+    saveMeals: (m) => F.updateDoc(listRef, { meals: m }),
     subscribe(f, onErr) { F.onSnapshot(items, (s) => f(s.docs.map((d) => ({ id: d.id, ...d.data() }))), onErr); },
     async create(d) { const ref = F.doc(items); await F.setDoc(ref, d); return ref.id; },
     update: (id, p) => F.updateDoc(F.doc(items, id), p),
@@ -378,6 +405,7 @@ function setMode(m) {
   $("mode-add").setAttribute("aria-pressed", m === "add");
   $("mode-shop").setAttribute("aria-pressed", m === "shop");
   $("say-btn").textContent = m === "add" ? "Add" : "Got it";
+  $("meals-row").hidden = m !== "add";
   $("say-input").placeholder = m === "add" ? "Milk, eggs and bread" : "I got the milk and bananas";
   $("hint").innerHTML = m === "add"
     ? "Tap the <b>mic</b> and say what you need, like “milk, eggs and bread”."
@@ -437,6 +465,15 @@ const unbought = { bought: false, boughtAt: null, boughtBy: null, boughtByName: 
 async function addItems(text) {
   const parts = splitItems(text.replace(ADD_LEAD, "").replace(ADD_TAIL, ""));
   if (!parts.length) return;
+  const { added, dupes, names } = await addParts(parts);
+  const n = names.length;
+  const msg = [n ? `Added ${n <= 3 ? names.join(", ") : n + " items"}` : "",
+    dupes.length ? `${dupes.join(", ")} ${dupes.length === 1 ? "is" : "are"} already on the list` : ""].filter(Boolean).join(". ");
+  toast(msg || "Nothing new to add", added.length ? () => write(store.removeMany(added)) : null);
+}
+
+// Adds each name unless it's already on the list; items sitting in the cart go back on the list.
+async function addParts(parts) {
   const added = [], dupes = [], names = [];
   for (const p of parts) {
     const existing = findExact(p, items);
@@ -446,10 +483,7 @@ async function addItems(text) {
     const id = await store.create({ name, aisle: aisleFor(name), ...stamp("added"), ...unbought }).catch(() => null);
     if (id) { added.push(id); names.push(name); }
   }
-  const n = names.length;
-  const msg = [n ? `Added ${n <= 3 ? names.join(", ") : n + " items"}` : "",
-    dupes.length ? `${dupes.join(", ")} ${dupes.length === 1 ? "is" : "are"} already on the list` : ""].filter(Boolean).join(". ");
-  toast(msg || "Nothing new to add", added.length ? () => write(store.removeMany(added)) : null);
+  return { added, dupes, names };
 }
 
 function markBought(text) {
@@ -555,6 +589,137 @@ function render() {
   }
 }
 
+/* ---------- meals ---------- */
+const el = (tag, props = {}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on") || k in e) e[k] = v;
+    else e.setAttribute(k, v);
+  }
+  e.append(...kids.filter((k) => k != null && k !== false));
+  return e;
+};
+const DEFAULT_MEALS = [{ id: "spaghetti", name: "Spaghetti", ingredients: ["Spaghetti", "Minced meat", "Tomatoes", "Grated cheese", "Italian vegetables"] }];
+let meals = [], seeded = false;
+const mealDlg = $("meal-dlg");
+const newId = () => Math.random().toString(36).slice(2, 10);
+const parseIngredients = (t) => {
+  const seen = new Set();
+  return t.split(/\n|,/).map((s) => cap(s.trim())).filter((s) => {
+    const k = keyOf(s); if (!s || !k || seen.has(k)) return false; seen.add(k); return true;
+  });
+};
+function saveMeals(next, undoMsg) {
+  const before = meals;
+  meals = next; renderMeals();
+  write(store.saveMeals(next));
+  if (undoMsg) toast(undoMsg, () => { meals = before; renderMeals(); write(store.saveMeals(before)); });
+}
+
+function renderMeals() {
+  $("meals-row").replaceChildren(
+    ...meals.map((m) => el("button", { type: "button", class: "meal-chip", onclick: () => openMeal(m) },
+      m.name, el("span", { class: "n" }, String(m.ingredients.length)))),
+    el("button", { type: "button", class: "meal-chip edit", onclick: openMealList }, meals.length ? "Edit meals" : "+ Add a meal"),
+  );
+}
+
+function show(...kids) {
+  mealDlg.replaceChildren(...kids);
+  if (!mealDlg.open) mealDlg.showModal();
+  mealDlg.scrollTop = 0;
+}
+const foot = (...kids) => el("div", { class: "sheet-foot" }, ...kids);
+const closeBtn = (label = "Cancel") => el("button", { type: "button", class: "btn ghost", onclick: () => mealDlg.close() }, label);
+
+// Pick sheet: everything is ticked; tap what you already have to strike it out.
+function openMeal(m) {
+  const state = m.ingredients.map((name) => {
+    const ex = findExact(name, items);
+    const onList = !!(ex && !ex.bought);
+    return { name, onList, add: !onList };
+  });
+  const draw = () => {
+    const n = state.filter((s) => s.add).length;
+    const rows = state.map((s) => {
+      const toggle = () => { if (s.onList) return; s.add = !s.add; draw(); };
+      const meta = s.onList ? "Already on the list" : s.add ? "" : "Have it, won't be added";
+      return el("li", { class: s.onList ? "onlist" : s.add ? "add" : "have" },
+        el("button", { type: "button", class: "check", innerHTML: CHECK, disabled: s.onList, onclick: toggle,
+          "aria-label": (s.add ? "Don't add " : "Add ") + s.name }),
+        el("div", { class: "label", onclick: toggle },
+          el("div", { class: "name" }, s.name), meta ? el("div", { class: "meta" }, meta) : null));
+    });
+    show(
+      el("h2", {}, m.name),
+      el("p", { class: "hint" }, "Tap anything you already have at home."),
+      el("ul", { class: "items" }, ...rows),
+      foot(
+        el("button", { type: "button", class: "linkbtn", style: "color:var(--leaf)", onclick: () => openMealEditor(m) }, "Edit meal"),
+        el("div", { class: "row" }, closeBtn(),
+          el("button", { type: "button", class: "btn", disabled: !n, onclick: async () => {
+            mealDlg.close();
+            const { added, names } = await addParts(state.filter((s) => s.add).map((s) => s.name));
+            toast(names.length ? `Added ${names.length} item${names.length === 1 ? "" : "s"} for ${m.name}` : "Nothing new to add",
+              added.length ? () => write(store.removeMany(added)) : null);
+          } }, n ? `Add ${n} item${n === 1 ? "" : "s"}` : "Nothing to add")),
+      ),
+    );
+  };
+  draw();
+}
+
+function openMealList() {
+  show(
+    el("h2", {}, "Meals"),
+    el("p", { class: "hint" }, "Your go-to meals. Tap one to change it."),
+    meals.length ? el("ul", { class: "items" }, ...meals.map((m) =>
+      el("li", {}, el("div", { class: "label", onclick: () => openMealEditor(m) },
+        el("div", { class: "name" }, m.name),
+        el("div", { class: "meta" }, m.ingredients.join(", ")))))) : null,
+    foot(
+      el("button", { type: "button", class: "btn ghost", onclick: () => openMealEditor(null) }, "+ New meal"),
+      el("button", { type: "button", class: "btn", onclick: () => mealDlg.close() }, "Done"),
+    ),
+  );
+}
+
+function openMealEditor(m) {
+  const name = el("input", { type: "text", id: "meal-name", value: m?.name || "", placeholder: "Spaghetti", required: true, autocomplete: "off" });
+  const ing = el("textarea", { id: "meal-ing", value: (m?.ingredients || []).join("\n"), placeholder: "Spaghetti\nMinced meat\nTomatoes\nGrated cheese" });
+  const err = el("div", { class: "err" });
+  const form = el("form", { class: "stack", onsubmit: (e) => {
+    e.preventDefault();
+    const nm = cap(name.value.trim()), list = parseIngredients(ing.value);
+    if (!nm) { err.textContent = "Give the meal a name."; return; }
+    if (!list.length) { err.textContent = "Add at least one ingredient."; return; }
+    const meal = { id: m?.id || newId(), name: nm, ingredients: list };
+    saveMeals(m ? meals.map((x) => (x.id === m.id ? meal : x)) : [...meals, meal]);
+    openMealList();
+  } },
+    el("label", { htmlFor: "meal-name" }, "Name"), name,
+    el("label", { htmlFor: "meal-ing" }, "Ingredients, one per line"), ing, err,
+    foot(
+      m ? el("button", { type: "button", class: "linkbtn", onclick: () => {
+        saveMeals(meals.filter((x) => x.id !== m.id), `Deleted ${m.name}`);
+        openMealList();
+      } }, "Delete") : el("span"),
+      el("div", { class: "row" },
+        el("button", { type: "button", class: "btn ghost", onclick: openMealList }, "Cancel"),
+        el("button", { type: "submit", class: "btn" }, "Save")),
+    ),
+  );
+  show(el("h2", {}, m ? "Edit meal" : "New meal"), form);
+  if (!m) setTimeout(() => name.focus(), 50);
+}
+
+// Tap outside a sheet to close it.
+for (const d of [mealDlg, $("share")]) d.addEventListener("click", (e) => {
+  const r = d.getBoundingClientRect();
+  if (e.clientY < r.top || e.clientY > r.bottom || e.clientX < r.left || e.clientX > r.right) d.close();
+});
+
 /* ---------- share sheet ---------- */
 async function openShare() {
   $("invite-err").textContent = "";
@@ -590,6 +755,12 @@ async function start() {
   $("app").hidden = false;
   store.subscribe((docs) => { items = docs; render(); },
     () => notice("Lost the live connection to the list. Reload the app to reconnect."));
+  renderMeals();
+  store.subscribeMeals((m) => {
+    if (m === undefined && !seeded) { seeded = true; saveMeals(DEFAULT_MEALS); return; }
+    meals = Array.isArray(m) ? m : [];
+    renderMeals();
+  });
   setInterval(render, 60000); // keep "5 min ago" fresh
 }
 start();

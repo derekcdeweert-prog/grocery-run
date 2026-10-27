@@ -1,6 +1,6 @@
 // Keeps the app itself available with poor signal in the store.
 // The list data is cached separately by Firestore's offline cache.
-const CACHE = "grocery-run-v2";
+const CACHE = "grocery-run-v3";
 const SHELL = ["./", "index.html", "config.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
 self.addEventListener("install", (e) => {
