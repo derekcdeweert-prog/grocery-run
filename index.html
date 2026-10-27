@@ -86,9 +86,7 @@ input:focus { outline: none; border-color: var(--leaf); }
 li.add .check { background: var(--leaf); }
 li.add .check svg { opacity: 1; }
 li.have .name { text-decoration: line-through; text-decoration-color: var(--tomato); text-decoration-thickness: 2px; color: var(--muted); }
-li.onlist .check { border-color: var(--line); cursor: default; }
-li.onlist .name { color: var(--muted); }
-li.onlist .label { cursor: default; }
+.qty { display: inline-block; background: var(--leaf-soft); color: var(--leaf); border-radius: 999px; padding: 0 8px; font-size: .85rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 dialog { max-height: 88dvh; overflow-y: auto; }
 dialog form.stack { display: grid; gap: 10px; margin-top: 12px; }
 dialog label { font-weight: 600; font-size: .9rem; }
@@ -472,18 +470,26 @@ async function addItems(text) {
   toast(msg || "Nothing new to add", added.length ? () => write(store.removeMany(added)) : null);
 }
 
-// Adds each name unless it's already on the list; items sitting in the cart go back on the list.
-async function addParts(parts) {
-  const added = [], dupes = [], names = [];
+// Adds each name. Items sitting in the cart go back on the list.
+// Already on the list: skipped, or with stack=true (meals) the count goes up, e.g. "Tomatoes ×2".
+async function addParts(parts, stack = false) {
+  const added = [], dupes = [], names = [], bumped = [];
   for (const p of parts) {
     const existing = findExact(p, items);
-    if (existing && !existing.bought) { dupes.push(existing.name); continue; }
-    if (existing) { write(store.update(existing.id, { ...unbought, ...stamp("added") })); names.push(existing.name); continue; }
+    if (existing && !existing.bought) {
+      if (!stack) { dupes.push(existing.name); continue; }
+      const qty = (existing.qty || 1) + 1;
+      bumped.push({ id: existing.id, qty: existing.qty || 1 });
+      existing.qty = qty; // so a second meal in the same moment counts on from here
+      write(store.update(existing.id, { qty }));
+      names.push(existing.name); continue;
+    }
+    if (existing) { write(store.update(existing.id, { ...unbought, ...stamp("added"), qty: 1 })); names.push(existing.name); continue; }
     const name = cap(p);
     const id = await store.create({ name, aisle: aisleFor(name), ...stamp("added"), ...unbought }).catch(() => null);
     if (id) { added.push(id); names.push(name); }
   }
-  return { added, dupes, names };
+  return { added, dupes, names, bumped };
 }
 
 function markBought(text) {
@@ -540,6 +546,7 @@ function row(it) {
   b.onclick = () => toggle(it);
   const lab = document.createElement("div"); lab.className = "label"; lab.onclick = () => toggle(it);
   const nm = document.createElement("div"); nm.className = "name"; nm.textContent = it.name;
+  if (it.qty > 1) nm.append(" ", el("span", { class: "qty" }, "×" + it.qty));
   const meta = document.createElement("div"); meta.className = "meta";
   const who = it.bought ? whoName(it.boughtBy, it.boughtByName) : whoName(it.addedBy, it.addedByName);
   const t = it.bought ? it.boughtAt : it.addedAt;
@@ -637,16 +644,15 @@ const closeBtn = (label = "Cancel") => el("button", { type: "button", class: "bt
 function openMeal(m) {
   const state = m.ingredients.map((name) => {
     const ex = findExact(name, items);
-    const onList = !!(ex && !ex.bought);
-    return { name, onList, add: !onList };
+    return { name, onListQty: ex && !ex.bought ? ex.qty || 1 : 0, add: true };
   });
   const draw = () => {
     const n = state.filter((s) => s.add).length;
     const rows = state.map((s) => {
-      const toggle = () => { if (s.onList) return; s.add = !s.add; draw(); };
-      const meta = s.onList ? "Already on the list" : s.add ? "" : "Have it, won't be added";
-      return el("li", { class: s.onList ? "onlist" : s.add ? "add" : "have" },
-        el("button", { type: "button", class: "check", innerHTML: CHECK, disabled: s.onList, onclick: toggle,
+      const toggle = () => { s.add = !s.add; draw(); };
+      const meta = !s.add ? "Have it, won't be added" : s.onListQty ? `Already on the list, becomes ×${s.onListQty + 1}` : "";
+      return el("li", { class: s.add ? "add" : "have" },
+        el("button", { type: "button", class: "check", innerHTML: CHECK, onclick: toggle,
           "aria-label": (s.add ? "Don't add " : "Add ") + s.name }),
         el("div", { class: "label", onclick: toggle },
           el("div", { class: "name" }, s.name), meta ? el("div", { class: "meta" }, meta) : null));
@@ -660,9 +666,12 @@ function openMeal(m) {
         el("div", { class: "row" }, closeBtn(),
           el("button", { type: "button", class: "btn", disabled: !n, onclick: async () => {
             mealDlg.close();
-            const { added, names } = await addParts(state.filter((s) => s.add).map((s) => s.name));
+            const { added, names, bumped } = await addParts(state.filter((s) => s.add).map((s) => s.name), true);
             toast(names.length ? `Added ${names.length} item${names.length === 1 ? "" : "s"} for ${m.name}` : "Nothing new to add",
-              added.length ? () => write(store.removeMany(added)) : null);
+              added.length || bumped.length ? () => {
+                if (added.length) write(store.removeMany(added));
+                bumped.forEach((b) => write(store.update(b.id, { qty: b.qty })));
+              } : null);
           } }, n ? `Add ${n} item${n === 1 ? "" : "s"}` : "Nothing to add")),
       ),
     );
