@@ -115,10 +115,10 @@ li.bought .check svg { opacity: 1; }
 li.bought .name { text-decoration: line-through; text-decoration-color: var(--tomato); text-decoration-thickness: 2px; color: var(--muted); }
 .x { flex: none; width: 40px; height: 40px; border: 0; background: transparent; color: var(--muted); font-size: 1.3rem; cursor: pointer; border-radius: 10px; }
 
-.cart-head { display: flex; justify-content: space-between; align-items: center; margin-top: 30px; }
-.cart-head .sign { background: var(--tomato); color: var(--surface); margin: 0; }
 .linkbtn { font: 600 .9rem var(--font-body); color: var(--tomato); background: none; border: 0; cursor: pointer; padding: 8px 0; }
-.cart-head + ul.items { margin-top: 8px; }
+.out { flex: none; font: 700 .9rem var(--font-body); color: var(--tomato); background: transparent; border: 1.5px solid var(--line); border-radius: 999px; padding: 7px 14px; margin-right: 4px; cursor: pointer; }
+.house li { padding-left: 14px; }
+.house .label { cursor: default; }
 
 .empty { text-align: center; padding: 48px 12px 24px; color: var(--muted); }
 .empty h2 { font-family: var(--font-display); font-weight: 600; color: var(--ink); font-size: 1.3rem; margin: 0 0 6px; text-wrap: balance; }
@@ -187,10 +187,11 @@ button:focus-visible, .label:focus-visible { outline: 2px solid var(--leaf); out
         <button class="iconbtn" id="share-open" type="button" aria-label="Share list and account"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M19 8v6M16 11h6"/></svg></button>
       </div>
     </div>
-    <div class="modes" role="group" aria-label="Mode">
-      <button type="button" id="mode-add" aria-pressed="true">Adding</button>
-      <button type="button" id="mode-shop" aria-pressed="false">At the store</button>
+    <div class="modes" role="group" aria-label="View">
+      <button type="button" id="tab-list" aria-pressed="true">Shopping list</button>
+      <button type="button" id="tab-house" aria-pressed="false">In the house</button>
     </div>
+    <p class="hint" id="house-hint" hidden>Everything you've bought. Ran out of something? Tap <b>Out</b>.</p>
     <form class="say" id="say" autocomplete="off">
       <input id="say-input" type="text" enterkeyhint="done" placeholder="Milk, eggs and bread" aria-label="Items">
       <button class="mic" type="button" id="mic" aria-label="Speak items"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg></button>
@@ -222,6 +223,14 @@ button:focus-visible, .label:focus-visible { outline: 2px solid var(--leaf); out
 </dialog>
 
 <dialog id="meal-dlg" aria-label="Meal"></dialog>
+<dialog id="out-dlg" aria-labelledby="out-title">
+  <h2 id="out-title"></h2>
+  <p class="hint">Do you want to put it back on the shopping list?</p>
+  <div class="sheet-foot">
+    <button class="btn ghost" id="out-no" type="button">No, just remove</button>
+    <button class="btn" id="out-yes" type="button">Yes, add to list</button>
+  </div>
+</dialog>
 
 <div id="toast" class="toast" hidden role="status"><span id="toast-msg"></span><button type="button" id="toast-undo">Undo</button></div>
 
@@ -395,19 +404,19 @@ function showGate(auth, A) {
 }
 
 /* ---------- app ---------- */
-let store, items = [], mode = "add";
+// Every item is either on the shopping list (bought: false) or in the house (bought: true).
+let store, items = [], tab = "list";
 const list = $("list");
 
-function setMode(m) {
-  mode = m;
-  $("mode-add").setAttribute("aria-pressed", m === "add");
-  $("mode-shop").setAttribute("aria-pressed", m === "shop");
-  $("say-btn").textContent = m === "add" ? "Add" : "Got it";
-  $("meals-row").hidden = m !== "add";
-  $("say-input").placeholder = m === "add" ? "Milk, eggs and bread" : "I got the milk and bananas";
-  $("hint").innerHTML = m === "add"
-    ? "Tap the <b>mic</b> and say what you need, like “milk, eggs and bread”."
-    : "Tap the <b>mic</b> and say what went in the cart, or tap an item to check it off.";
+function setTab(t) {
+  tab = t;
+  $("tab-list").setAttribute("aria-pressed", t === "list");
+  $("tab-house").setAttribute("aria-pressed", t === "house");
+  for (const id of ["say", "hint", "meals-row"]) $(id).hidden = t !== "list";
+  $("house-hint").hidden = t !== "house";
+  try { localStorage.setItem("tab", t); } catch {}
+  if (store) render();
+  window.scrollTo(0, 0);
 }
 
 /* ---------- voice button ---------- */
@@ -416,7 +425,7 @@ let rec = null, heard = "";
 function setMic(on) {
   $("mic").classList.toggle("on", on);
   $("mic").setAttribute("aria-label", on ? "Stop listening" : "Speak items");
-  $("say-input").placeholder = on ? "Listening…" : (mode === "add" ? "Milk, eggs and bread" : "I got the milk and bananas");
+  $("say-input").placeholder = on ? "Listening…" : "Milk, eggs and bread";
 }
 $("mic").onclick = () => {
   if (rec) { rec.stop(); return; }
@@ -434,8 +443,8 @@ $("mic").onclick = () => {
   try { rec.start(); setMic(true); }
   catch { rec = null; toast("Voice didn't start. Try again."); }
 };
-$("mode-add").onclick = () => setMode("add");
-$("mode-shop").onclick = () => setMode("shop");
+$("tab-list").onclick = () => setTab("list");
+$("tab-house").onclick = () => setTab("house");
 
 let toastTimer = null;
 function toast(msg, undo) {
@@ -470,7 +479,7 @@ async function addItems(text) {
   toast(msg || "Nothing new to add", added.length ? () => write(store.removeMany(added)) : null);
 }
 
-// Adds each name. Items sitting in the cart go back on the list.
+// Adds each name. Items that are in the house go back on the list.
 // Already on the list: skipped, or with stack=true (meals) the count goes up, e.g. "Tomatoes ×2".
 async function addParts(parts, stack = false) {
   const added = [], dupes = [], names = [], bumped = [];
@@ -500,7 +509,7 @@ function markBought(text) {
     if (hit) got.push(hit); else missing.push(cap(p));
   }
   for (const it of got) write(store.update(it.id, { bought: true, ...stamp("bought") }));
-  const msg = [got.length ? `Checked off ${got.map((g) => g.name).join(", ")}` : "",
+  const msg = [got.length ? `${got.map((g) => g.name).join(", ")} moved to In the house` : "",
     missing.length ? `Not on the list: ${missing.join(", ")}` : ""].filter(Boolean).join(". ");
   toast(msg || "Nothing matched", got.length ? () => got.forEach((it) => write(store.update(it.id, unbought))) : null);
 }
@@ -510,23 +519,35 @@ $("say").addEventListener("submit", async (e) => {
   const input = $("say-input"), text = input.value.trim();
   if (!text || !store) return;
   input.value = "";
-  // "I got the milk" checks it off even in Adding mode; "add bread" adds even at the store.
+  // "I got the milk" checks it off; anything else is added.
   if (BOUGHT_LEAD.test(text)) markBought(text);
-  else if (ADD_LEAD.test(text) || mode === "add") await addItems(text);
-  else markBought(text);
+  else await addItems(text);
 });
 
-function toggle(it) { write(store.update(it.id, it.bought ? unbought : { bought: true, ...stamp("bought") })); }
+// Checking something off on the shopping list moves it to In the house.
+function checkOff(it) {
+  write(store.update(it.id, { bought: true, ...stamp("bought") }));
+  toast(`${it.name} moved to In the house`, () => write(store.update(it.id, unbought)));
+}
 function removeItem(it) {
   const { id, ...body } = it;
   write(store.remove(id));
   toast(`Removed ${it.name}`, () => write(store.set(id, body)));
 }
-function clearCart() {
-  const cart = items.filter((i) => i.bought);
-  write(store.removeMany(cart.map((i) => i.id)));
-  toast(`Cleared ${cart.length} item${cart.length === 1 ? "" : "s"} from the cart`);
+
+// Ran out of something in the house: ask whether it goes back on the list.
+let outItem = null;
+function askOut(it) {
+  outItem = it;
+  $("out-title").textContent = `Out of ${it.name}?`;
+  $("out-dlg").showModal();
 }
+$("out-yes").onclick = () => {
+  const it = outItem; $("out-dlg").close(); if (!it) return;
+  write(store.update(it.id, { ...unbought, ...stamp("added"), qty: 1 }));
+  toast(`${it.name} is back on the shopping list`, () => write(store.update(it.id, { bought: true, boughtAt: it.boughtAt, boughtBy: it.boughtBy, boughtByName: it.boughtByName || null, qty: it.qty || 1 })));
+};
+$("out-no").onclick = () => { const it = outItem; $("out-dlg").close(); if (it) removeItem(it); };
 
 const ago = (t) => {
   const m = Math.round((Date.now() - t) / 60000);
@@ -537,62 +558,52 @@ const ago = (t) => {
 const CHECK = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>';
 const whoName = (uid, name) => (uid && uid === store.me.uid ? "you" : name || "");
 
-function row(it) {
-  const li = document.createElement("li");
-  if (it.bought) li.className = "bought";
-  const b = document.createElement("button");
-  b.className = "check"; b.type = "button"; b.innerHTML = CHECK;
-  b.setAttribute("aria-label", (it.bought ? "Put back on list: " : "Check off: ") + it.name);
-  b.onclick = () => toggle(it);
-  const lab = document.createElement("div"); lab.className = "label"; lab.onclick = () => toggle(it);
-  const nm = document.createElement("div"); nm.className = "name"; nm.textContent = it.name;
+function nameEl(it) {
+  const nm = el("div", { class: "name" }, it.name);
   if (it.qty > 1) nm.append(" ", el("span", { class: "qty" }, "×" + it.qty));
-  const meta = document.createElement("div"); meta.className = "meta";
-  const who = it.bought ? whoName(it.boughtBy, it.boughtByName) : whoName(it.addedBy, it.addedByName);
-  const t = it.bought ? it.boughtAt : it.addedAt;
-  meta.textContent = (it.bought ? "Got " : "Added ") + (who ? "by " + who + " · " : "") + (t ? ago(t) : "");
-  lab.append(nm, meta);
-  const x = document.createElement("button");
-  x.className = "x"; x.type = "button"; x.textContent = "×"; x.setAttribute("aria-label", "Remove " + it.name);
-  x.onclick = () => removeItem(it);
-  li.append(b, lab, x);
-  return li;
+  return nm;
+}
+function metaEl(prefix, uid, name, t) {
+  const who = whoName(uid, name);
+  return el("div", { class: "meta" }, prefix + (who ? " by " + who : "") + (t ? " · " + ago(t) : ""));
+}
+
+function listRow(it) {
+  return el("li", {},
+    el("button", { type: "button", class: "check", innerHTML: CHECK, onclick: () => checkOff(it), "aria-label": "Bought: " + it.name }),
+    el("div", { class: "label", onclick: () => checkOff(it) }, nameEl(it), metaEl("Added", it.addedBy, it.addedByName, it.addedAt)),
+    el("button", { type: "button", class: "x", onclick: () => removeItem(it), "aria-label": "Remove " + it.name }, "×"));
+}
+function houseRow(it) {
+  return el("li", {},
+    el("div", { class: "label" }, nameEl(it), metaEl("Bought", it.boughtBy, it.boughtByName, it.boughtAt)),
+    el("button", { type: "button", class: "out", onclick: () => askOut(it), "aria-label": "Out of " + it.name }, "Out"));
+}
+
+function empty(title, text, eg) {
+  list.append(el("div", { class: "empty" }, el("h2", {}, title), el("p", {}, text), eg ? el("span", { class: "eg" }, eg) : null));
 }
 
 function render() {
   const open = items.filter((i) => !i.bought);
-  const cart = items.filter((i) => i.bought).sort((a, b) => (b.boughtAt || 0) - (a.boughtAt || 0));
-  $("count").textContent = open.length ? `${open.length} to get` : "";
+  const house = items.filter((i) => i.bought);
+  $("count").textContent = tab === "list" ? (open.length ? `${open.length} to get` : "") : (house.length ? `${house.length} at home` : "");
   list.replaceChildren();
-  if (!items.length) {
-    list.innerHTML = '<div class="empty"><h2>The list is empty</h2><p>Add what you need and it shows up here and on your partner\'s phone right away.</p><span class="eg">“Add bananas, oat milk and coffee”</span></div>';
+  const shown = tab === "list" ? open : house;
+  if (!shown.length) {
+    if (tab === "list") empty("Nothing to buy", "Add what you need and it shows up here and on your partner's phone right away.", "“Add bananas, oat milk and coffee”");
+    else empty("Nothing here yet", "When you check something off on the shopping list, it shows up here.");
     return;
-  }
-  if (!open.length) {
-    const e = document.createElement("div"); e.className = "empty";
-    e.innerHTML = "<h2>Everything's in the cart</h2><p>Nice run. Clear the cart below when you're home.</p>";
-    list.append(e);
   }
   let n = 0;
   for (const aisle of AISLES) {
-    const inAisle = open.filter((i) => (AISLES.includes(i.aisle) ? i.aisle : "Other") === aisle).sort((a, b) => a.addedAt - b.addedAt);
+    const inAisle = shown.filter((i) => (AISLES.includes(i.aisle) ? i.aisle : "Other") === aisle)
+      .sort((a, b) => tab === "list" ? a.addedAt - b.addedAt : a.name.localeCompare(b.name));
     if (!inAisle.length) continue;
     n++;
-    const sec = document.createElement("section"); sec.className = "aisle";
-    const sign = document.createElement("div"); sign.className = "sign";
-    sign.innerHTML = `<span class="no">${n}</span>`; sign.append(aisle);
-    const ul = document.createElement("ul"); ul.className = "items";
-    inAisle.forEach((it) => ul.append(row(it)));
-    sec.append(sign, ul); list.append(sec);
-  }
-  if (cart.length) {
-    const head = document.createElement("div"); head.className = "cart-head";
-    const sign = document.createElement("div"); sign.className = "sign"; sign.textContent = `In the cart · ${cart.length}`;
-    const clr = document.createElement("button"); clr.className = "linkbtn"; clr.type = "button"; clr.textContent = "Clear cart"; clr.onclick = clearCart;
-    head.append(sign, clr);
-    const ul = document.createElement("ul"); ul.className = "items";
-    cart.forEach((it) => ul.append(row(it)));
-    list.append(head, ul);
+    const sign = el("div", { class: "sign" }, el("span", { class: "no" }, String(n)), aisle);
+    const ul = el("ul", { class: "items" + (tab === "house" ? " house" : "") }, ...inAisle.map(tab === "list" ? listRow : houseRow));
+    list.append(el("section", { class: "aisle" }, sign, ul));
   }
 }
 
@@ -644,13 +655,16 @@ const closeBtn = (label = "Cancel") => el("button", { type: "button", class: "bt
 function openMeal(m) {
   const state = m.ingredients.map((name) => {
     const ex = findExact(name, items);
-    return { name, onListQty: ex && !ex.bought ? ex.qty || 1 : 0, add: true };
+    const inHouse = !!(ex && ex.bought);
+    return { name, inHouse, onListQty: ex && !ex.bought ? ex.qty || 1 : 0, add: !inHouse };
   });
   const draw = () => {
     const n = state.filter((s) => s.add).length;
     const rows = state.map((s) => {
       const toggle = () => { s.add = !s.add; draw(); };
-      const meta = !s.add ? "Have it, won't be added" : s.onListQty ? `Already on the list, becomes ×${s.onListQty + 1}` : "";
+      const meta = !s.add ? (s.inHouse ? "In the house, won't be added" : "Have it, won't be added")
+        : s.inHouse ? "In the house, but adding it anyway"
+        : s.onListQty ? `Already on the list, becomes ×${s.onListQty + 1}` : "";
       return el("li", { class: s.add ? "add" : "have" },
         el("button", { type: "button", class: "check", innerHTML: CHECK, onclick: toggle,
           "aria-label": (s.add ? "Don't add " : "Add ") + s.name }),
@@ -724,7 +738,7 @@ function openMealEditor(m) {
 }
 
 // Tap outside a sheet to close it.
-for (const d of [mealDlg, $("share")]) d.addEventListener("click", (e) => {
+for (const d of [mealDlg, $("share"), $("out-dlg")]) d.addEventListener("click", (e) => {
   const r = d.getBoundingClientRect();
   if (e.clientY < r.top || e.clientY > r.bottom || e.clientX < r.left || e.clientX > r.right) d.close();
 });
@@ -762,6 +776,8 @@ async function start() {
     }
   }
   $("app").hidden = false;
+  let saved = "list"; try { saved = localStorage.getItem("tab") || "list"; } catch {}
+  setTab(saved === "house" ? "house" : "list");
   store.subscribe((docs) => { items = docs; render(); },
     () => notice("Lost the live connection to the list. Reload the app to reconnect."));
   renderMeals();
