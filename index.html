@@ -118,6 +118,8 @@ li.bought .name { text-decoration: line-through; text-decoration-color: var(--to
 .linkbtn { font: 600 .9rem var(--font-body); color: var(--tomato); background: none; border: 0; cursor: pointer; padding: 8px 0; }
 .out { flex: none; font: 700 .9rem var(--font-body); color: var(--tomato); background: transparent; border: 1.5px solid var(--line); border-radius: 999px; padding: 7px 14px; margin-right: 4px; cursor: pointer; }
 .house li { padding-left: 14px; }
+.bought-bar { margin-top: 28px; display: grid; gap: 8px; text-align: center; }
+.bought-bar .btn { width: 100%; padding-block: 15px; font-size: 1.05rem; }
 .house .label { cursor: default; }
 
 .empty { text-align: center; padding: 48px 12px 24px; color: var(--muted); }
@@ -467,7 +469,8 @@ function write(p) {
 }
 
 const stamp = (prefix) => ({ [prefix + "At"]: Date.now(), [prefix + "By"]: store.me.uid, [prefix + "ByName"]: store.me.name });
-const unbought = { bought: false, boughtAt: null, boughtBy: null, boughtByName: null };
+// On the list: checked = ticked off in the store but still visible, until "Bought" moves it to In the house.
+const unbought = { bought: false, checked: false, boughtAt: null, boughtBy: null, boughtByName: null };
 
 async function addItems(text) {
   const parts = splitItems(text.replace(ADD_LEAD, "").replace(ADD_TAIL, ""));
@@ -505,13 +508,13 @@ function markBought(text) {
   const parts = splitItems(text.replace(BOUGHT_LEAD, "").replace(BOUGHT_TAIL, ""));
   const got = [], missing = [];
   for (const p of parts) {
-    const hit = findItem(p, items.filter((i) => !i.bought && !got.includes(i)));
+    const hit = findItem(p, items.filter((i) => !i.bought && !i.checked && !got.includes(i)));
     if (hit) got.push(hit); else missing.push(cap(p));
   }
-  for (const it of got) write(store.update(it.id, { bought: true, ...stamp("bought") }));
-  const msg = [got.length ? `${got.map((g) => g.name).join(", ")} moved to In the house` : "",
+  for (const it of got) write(store.update(it.id, { checked: true }));
+  const msg = [got.length ? `Checked off ${got.map((g) => g.name).join(", ")}` : "",
     missing.length ? `Not on the list: ${missing.join(", ")}` : ""].filter(Boolean).join(". ");
-  toast(msg || "Nothing matched", got.length ? () => got.forEach((it) => write(store.update(it.id, unbought))) : null);
+  toast(msg || "Nothing matched", got.length ? () => got.forEach((it) => write(store.update(it.id, { checked: false }))) : null);
 }
 
 $("say").addEventListener("submit", async (e) => {
@@ -524,10 +527,15 @@ $("say").addEventListener("submit", async (e) => {
   else await addItems(text);
 });
 
-// Checking something off on the shopping list moves it to In the house.
-function checkOff(it) {
-  write(store.update(it.id, { bought: true, ...stamp("bought") }));
-  toast(`${it.name} moved to In the house`, () => write(store.update(it.id, unbought)));
+// Tapping an item ticks it off (or back on); it stays on the list until "Bought".
+function checkOff(it) { write(store.update(it.id, { checked: !it.checked })); }
+function moveBought() {
+  const done = items.filter((i) => !i.bought && i.checked);
+  if (!done.length) return;
+  const s = stamp("bought");
+  done.forEach((it) => write(store.update(it.id, { bought: true, checked: false, ...s })));
+  toast(`Moved ${done.length} item${done.length === 1 ? "" : "s"} to In the house`,
+    () => done.forEach((it) => write(store.update(it.id, { ...unbought, checked: true }))));
 }
 function removeItem(it) {
   const { id, ...body } = it;
@@ -569,8 +577,8 @@ function metaEl(prefix, uid, name, t) {
 }
 
 function listRow(it) {
-  return el("li", {},
-    el("button", { type: "button", class: "check", innerHTML: CHECK, onclick: () => checkOff(it), "aria-label": "Bought: " + it.name }),
+  return el("li", { class: it.checked ? "bought" : "" },
+    el("button", { type: "button", class: "check", innerHTML: CHECK, onclick: () => checkOff(it), "aria-label": (it.checked ? "Uncheck: " : "Check off: ") + it.name }),
     el("div", { class: "label", onclick: () => checkOff(it) }, nameEl(it), metaEl("Added", it.addedBy, it.addedByName, it.addedAt)),
     el("button", { type: "button", class: "x", onclick: () => removeItem(it), "aria-label": "Remove " + it.name }, "×"));
 }
@@ -587,7 +595,8 @@ function empty(title, text, eg) {
 function render() {
   const open = items.filter((i) => !i.bought);
   const house = items.filter((i) => i.bought);
-  $("count").textContent = tab === "list" ? (open.length ? `${open.length} to get` : "") : (house.length ? `${house.length} at home` : "");
+  const toGet = open.filter((i) => !i.checked).length, ticked = open.length - toGet;
+  $("count").textContent = tab === "list" ? (toGet ? `${toGet} to get` : "") : (house.length ? `${house.length} at home` : "");
   list.replaceChildren();
   const shown = tab === "list" ? open : house;
   if (!shown.length) {
@@ -605,6 +614,10 @@ function render() {
     const ul = el("ul", { class: "items" + (tab === "house" ? " house" : "") }, ...inAisle.map(tab === "list" ? listRow : houseRow));
     list.append(el("section", { class: "aisle" }, sign, ul));
   }
+  if (tab === "list") list.append(el("div", { class: "bought-bar" },
+    el("button", { type: "button", class: "btn", disabled: !ticked, onclick: moveBought },
+      ticked ? `Bought · move ${ticked} to In the house` : "Bought"),
+    ticked ? null : el("p", { class: "hint" }, "Tick items off while you shop, then tap Bought.")));
 }
 
 /* ---------- meals ---------- */
