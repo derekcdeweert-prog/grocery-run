@@ -257,7 +257,7 @@ if ("serviceWorker" in navigator && location.protocol === "https:") {
 
 /* ---------- list logic (aisles, speech parsing, matching) ---------- */
 // Store-walk order, so the list reads in the order you pass the shelves.
-const AISLES = ["Produce", "Meat", "Dairy and Eggs", "Canned Goods", "Coffee, Tea, and Cookies", "Beer and Wine", "Juices",
+const AISLES = ["Produce", "Meat", "Dairy and Eggs", "Canned Goods", "Coffee, Tea, and Cookies", "Crisps and Nuts", "Beer and Wine", "Juices",
   "Soft Drinks", "Household Goods", "Frozen", "Baking Goods", "Bakery", "Other"];
 // "Other" only shows when something is in it; every other category is always on the shopping list.
 // Older category names, from before the switch to these categories.
@@ -273,6 +273,7 @@ const RULES = [
   ["Produce", /\b(green beans)\b/],
   ["Canned Goods", /\b(canned|cans?|tins?|beans?|tomato (sauce|paste)|passata|soups?|tuna|chickpeas|lentils|broth|stock|coconut milk|sardines|corned beef)\b/],
   ["Coffee, Tea, and Cookies", /\b(coffee|espresso|tea|cookies?|biscuits?|stroopwafels?|speculaas|wafers?|creamer|chocolate|candy|snoep)\b/],
+  ["Crisps and Nuts", /\b(crisps|chips|tortilla chips|nachos|pringles|doritos|popcorn|pretzels?|nuts|peanuts|almonds|cashews|pistachios|walnuts|hazelnuts|pecans|macadamias?|trail mix|borrelnootjes|nootjes)\b/],
   ["Produce", /\b(apples?|bananas?|lettuce|tomato(es)?|onions?|garlic|potato(es)?|carrots?|avocados?|lemons?|limes?|berries|strawberries|blueberries|raspberries|spinach|cucumbers?|peppers?|broccoli|celery|grapes|oranges?|mushrooms?|herbs|cilantro|parsley|basil|kale|zucchini|fruit|salad|ginger|eggplants?|cabbage|corn|peaches|pears?|melon|watermelon|squash|scallions?|green onions?|cauliflower|asparagus|beets?|vegetables|veggies|greens|leeks?|kiwis?|mango|pineapple)\b/],
   ["Bakery", /\b(bread|bagels?|buns?|rolls?|tortillas?|croissants?|muffins?|cake|baguettes?|pita|naan|sourdough|wraps?)\b/],
   ["Meat", /\b(meat|chicken|beef|pork|turkey|bacon|sausages?|ham|salmon|fish|shrimp|prawns|steaks?|ground|mince|minced|lamb|cod|tilapia|hot dogs?|deli|salami|burgers?)\b/],
