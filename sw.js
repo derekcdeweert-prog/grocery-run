@@ -1,6 +1,6 @@
 // Keeps the app itself available with poor signal in the store.
 // The list data is cached separately by Firestore's offline cache.
-const CACHE = "grocery-run-v9";
+const CACHE = "grocery-run-v10";
 const SHELL = ["./", "index.html", "config.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
 self.addEventListener("install", (e) => {
@@ -16,8 +16,10 @@ self.addEventListener("fetch", (e) => {
   const sdk = url.hostname === "www.gstatic.com" || url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com";
   if (!mine && !sdk) return; // never touch Firestore / auth traffic
   // Network first, cache as fallback, so updates show up right away.
+  // "no-cache" asks GitHub whether there's a newer version every time, instead of
+  // reusing a copy the phone kept for up to 10 minutes.
   e.respondWith(
-    fetch(e.request).then((res) => {
+    fetch(e.request, mine ? { cache: "no-cache" } : {}).then((res) => {
       if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); }
       return res;
     }).catch(() => caches.match(e.request, { ignoreSearch: true }))
