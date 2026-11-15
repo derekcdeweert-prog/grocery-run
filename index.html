@@ -120,7 +120,7 @@ li.bought .name { text-decoration: line-through; text-decoration-color: var(--to
 li.dragging { opacity: .3; }
 .drag-ghost { position: fixed; z-index: 30; pointer-events: none; list-style: none; margin: 0; display: flex; align-items: center; gap: 12px; padding: 4px 6px 4px 12px; background: var(--surface); border: 1.5px solid var(--leaf); border-radius: var(--r); box-shadow: 0 12px 28px rgb(0 0 0 / .22); transform: scale(1.02); }
 body.is-dragging { -webkit-user-select: none; user-select: none; cursor: grabbing; }
-.drop-empty .drop-box { border: 1.5px dashed var(--line); border-radius: var(--r); padding: 12px 14px; color: var(--muted); font-size: .9rem; }
+.drop-empty .drop-box { border: 1.5px dashed var(--line); border-radius: var(--r); padding: 9px 14px; color: var(--muted); font-size: .85rem; }
 section.aisle.over ul.items, section.aisle.over .drop-box { outline: 2.5px solid var(--leaf); outline-offset: 2px; }
 section.aisle.over .sign { background: var(--leaf); color: var(--leaf-ink); }
 .aisle-pick li.current .name::after { content: " · now"; color: var(--muted); font-weight: 500; }
@@ -257,16 +257,27 @@ if ("serviceWorker" in navigator && location.protocol === "https:") {
 
 /* ---------- list logic (aisles, speech parsing, matching) ---------- */
 // Store-walk order, so the list reads in the order you pass the shelves.
-const AISLES = ["Produce", "Bakery", "Meat & fish", "Dairy & eggs", "Pantry", "Frozen", "Drinks", "Household", "Other"];
+const AISLES = ["Produce", "Meat", "Dairy and Eggs", "Canned Goods", "Coffee, Tea, and Cookies", "Beer and Wine", "Juices",
+  "Soft Drinks", "Household Goods", "Frozen", "Baking Goods", "Bakery", "Other"];
+// "Other" only shows when something is in it; every other category is always on the shopping list.
+// Older category names, from before the switch to these categories.
+const LEGACY = { "Meat & fish": "Meat", "Dairy & eggs": "Dairy and Eggs", "Household": "Household Goods" };
+// First match wins, so the more specific rules come first (e.g. "orange juice" before "orange").
 const RULES = [
-  ["Frozen", /\b(frozen|ice cream|popsicles?|ice)\b/],
-  ["Pantry", /\b(peanut butter|almond butter|tomato (sauce|paste)|canned|beans?|rice|pasta|spaghetti|noodles?|flour|sugar|oil|vinegar|cereal|oats?|oatmeal|sauce|soups?|salt|pepper flakes|spices?|cinnamon|coffee|tea|honey|jam|jelly|syrup|crackers?|chips|snacks?|nuts|almonds|ketchup|mustard|mayo|mayonnaise|broth|stock|baking|granola|tuna|salsa|popcorn|chocolate|cookies)\b/],
-  ["Produce", /\b(apples?|bananas?|lettuce|tomato(es)?|onions?|garlic|potato(es)?|carrots?|avocados?|lemons?|limes?|berries|strawberries|blueberries|raspberries|spinach|cucumbers?|peppers?|broccoli|celery|grapes|oranges?|mushrooms?|herbs|cilantro|parsley|basil|kale|zucchini|fruit|salad|ginger|eggplants?|cabbage|corn|peaches|pears?|melon|watermelon|squash|scallions?|green onions?|cauliflower|asparagus|beets?|vegetables|veggies|greens|leeks?)\b/],
-  ["Bakery", /\b(bread|bagels?|buns?|rolls?|tortillas?|croissants?|muffins?|cake|baguettes?|pita|naan|sourdough)\b/],
-  ["Meat & fish", /\b(chicken|beef|pork|turkey|bacon|sausages?|ham|salmon|fish|shrimp|steaks?|ground|mince|lamb|cod|tilapia|hot dogs?|deli|salami)\b/],
-  ["Dairy & eggs", /\b(milk|eggs?|cheese|cheddar|mozzarella|parmesan|yogh?urt|butter|cream|sour cream|cottage|half and half)\b/],
-  ["Drinks", /\b(water|juice|soda|pop|beer|wine|sparkling|kombucha|seltzer|lemonade|coke)\b/],
-  ["Household", /\b(paper towels?|toilet paper|tp|soap|detergent|dish|trash bags?|garbage bags?|foil|plastic wrap|cling|shampoo|conditioner|toothpaste|tissues?|kleenex|sponges?|diapers?|wipes|batteries|cleaner|bleach|napkins?|ziploc|razors?|deodorant)\b/],
+  ["Other", /\b(peanut butter|almond butter)\b/],
+  ["Frozen", /\b(frozen|ice cream|popsicles?|ice cubes?|frozen pizza)\b/],
+  ["Baking Goods", /\b(flour|sugar|baking|yeast|baking soda|baking powder|vanilla|cocoa|icing|cake mix|sprinkles|cornstarch|custard powder)\b/],
+  ["Juices", /\b(juices?|smoothies?)\b/],
+  ["Beer and Wine", /\b(beers?|wines?|prosecco|champagne|cava|cider|ros[eé]|ipa|lager|pils)\b/],
+  ["Soft Drinks", /\b(soda|cola|coke|pop|sparkling|seltzer|water|ice tea|iced tea|lemonade|kombucha|fanta|sprite|tonic|energy drinks?|soft drinks?|7up|pepsi)\b/],
+  ["Produce", /\b(green beans)\b/],
+  ["Canned Goods", /\b(canned|cans?|tins?|beans?|tomato (sauce|paste)|passata|soups?|tuna|chickpeas|lentils|broth|stock|coconut milk|sardines|corned beef)\b/],
+  ["Coffee, Tea, and Cookies", /\b(coffee|espresso|tea|cookies?|biscuits?|stroopwafels?|speculaas|wafers?|creamer|chocolate|candy|snoep)\b/],
+  ["Produce", /\b(apples?|bananas?|lettuce|tomato(es)?|onions?|garlic|potato(es)?|carrots?|avocados?|lemons?|limes?|berries|strawberries|blueberries|raspberries|spinach|cucumbers?|peppers?|broccoli|celery|grapes|oranges?|mushrooms?|herbs|cilantro|parsley|basil|kale|zucchini|fruit|salad|ginger|eggplants?|cabbage|corn|peaches|pears?|melon|watermelon|squash|scallions?|green onions?|cauliflower|asparagus|beets?|vegetables|veggies|greens|leeks?|kiwis?|mango|pineapple)\b/],
+  ["Bakery", /\b(bread|bagels?|buns?|rolls?|tortillas?|croissants?|muffins?|cake|baguettes?|pita|naan|sourdough|wraps?)\b/],
+  ["Meat", /\b(meat|chicken|beef|pork|turkey|bacon|sausages?|ham|salmon|fish|shrimp|prawns|steaks?|ground|mince|minced|lamb|cod|tilapia|hot dogs?|deli|salami|burgers?)\b/],
+  ["Dairy and Eggs", /\b(milk|eggs?|cheese|cheddar|mozzarella|parmesan|yogh?urt|butter|cream|sour cream|cottage|half and half|quark|kwark|vla)\b/],
+  ["Household Goods", /\b(paper towels?|toilet paper|tp|soap|detergent|dish|trash bags?|garbage bags?|foil|plastic wrap|cling|shampoo|conditioner|toothpaste|tissues?|kleenex|sponges?|diapers?|wipes|batteries|cleaner|bleach|napkins?|ziploc|razors?|deodorant)\b/],
 ];
 const aisleFor = (name) => { const n = name.toLowerCase(); for (const [a, re] of RULES) if (re.test(n)) return a; return "Other"; };
 const KEEP = ["mac and cheese", "salt and pepper", "half and half", "peanut butter and jelly", "sour cream and onion", "chips and salsa", "fish and chips"];
@@ -426,7 +437,7 @@ function showGate(auth, A) {
 let store, items = [], tab = "list";
 // Categories you've dragged items to. They win over the built-in rules next time you add the same item.
 let aisleMemory = {};
-const learned = (name) => { const a = aisleMemory[keyOf(name)]; return AISLES.includes(a) ? a : null; };
+const learned = (name) => { const a = aisleMemory[keyOf(name)]; const b = LEGACY[a] || a; return AISLES.includes(b) ? b : null; };
 const aisleOf = (name) => learned(name) || aisleFor(name);
 const learnedPatch = (name) => { const a = learned(name); return a ? { aisle: a } : {}; };
 const list = $("list");
@@ -615,7 +626,8 @@ function houseRow(it) {
 
 /* ---------- categories: drag an item to another one ---------- */
 const GRIP = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></svg>';
-const aisleNow = (it) => (AISLES.includes(it.aisle) ? it.aisle : "Other");
+// Items saved under an old category are shown in the matching new one.
+const aisleNow = (it) => AISLES.includes(it.aisle) ? it.aisle : LEGACY[it.aisle] || learned(it.name) || aisleFor(it.name);
 
 // Puts the item in the new category and remembers it for next time (for both partners).
 function moveToAisle(it, aisle) {
@@ -757,18 +769,20 @@ function render() {
   const shown = tab === "list" ? open : house;
   if (!shown.length) {
     if (tab === "list") empty("Nothing to buy", "Add what you need and it shows up here and on your partner's phone right away.", "“Add bananas, oat milk and coffee”");
-    else empty("Nothing here yet", "When you check something off on the shopping list, it shows up here.");
-    return;
+    else { empty("Nothing here yet", "When you check something off on the shopping list, it shows up here."); return; }
   }
   let n = 0;
   for (const aisle of AISLES) {
     const inAisle = shown.filter((i) => aisleNow(i) === aisle)
       .sort((a, b) => tab === "list" ? a.addedAt - b.addedAt : a.name.localeCompare(b.name));
-    if (!inAisle.length) continue;
+    // On the shopping list every category shows (except an empty "Other"); In the house only shows what's there.
+    if (!inAisle.length && (tab === "house" || aisle === "Other")) continue;
     n++;
     const sign = el("div", { class: "sign" }, el("span", { class: "no" }, String(n)), aisle);
-    const ul = el("ul", { class: "items" + (tab === "house" ? " house" : "") }, ...inAisle.map(tab === "list" ? listRow : houseRow));
-    const sec = el("section", { class: "aisle" }, sign, ul);
+    const body = inAisle.length
+      ? el("ul", { class: "items" + (tab === "house" ? " house" : "") }, ...inAisle.map(tab === "list" ? listRow : houseRow))
+      : el("div", { class: "drop-box" }, "Nothing needed");
+    const sec = el("section", { class: "aisle" + (inAisle.length ? "" : " drop-empty") }, sign, body);
     sec.dataset.aisle = aisle;
     list.append(sec);
   }
