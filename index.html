@@ -114,6 +114,16 @@ li.bought .check svg { opacity: 1; }
 .meta { color: var(--muted); font-size: .8rem; }
 li.bought .name { text-decoration: line-through; text-decoration-color: var(--tomato); text-decoration-thickness: 2px; color: var(--muted); }
 .x { flex: none; width: 40px; height: 40px; border: 0; background: transparent; color: var(--muted); font-size: 1.3rem; cursor: pointer; border-radius: 10px; }
+/* Drag an item to another category */
+.grip { flex: none; width: 36px; height: 44px; margin-left: -4px; border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; cursor: grab; padding: 0; border-radius: 10px; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.grip svg { width: 18px; height: 18px; }
+li.dragging { opacity: .3; }
+.drag-ghost { position: fixed; z-index: 30; pointer-events: none; list-style: none; margin: 0; display: flex; align-items: center; gap: 12px; padding: 4px 6px 4px 12px; background: var(--surface); border: 1.5px solid var(--leaf); border-radius: var(--r); box-shadow: 0 12px 28px rgb(0 0 0 / .22); transform: scale(1.02); }
+body.is-dragging { -webkit-user-select: none; user-select: none; cursor: grabbing; }
+.drop-empty .drop-box { border: 1.5px dashed var(--line); border-radius: var(--r); padding: 12px 14px; color: var(--muted); font-size: .9rem; }
+section.aisle.over ul.items, section.aisle.over .drop-box { outline: 2.5px solid var(--leaf); outline-offset: 2px; }
+section.aisle.over .sign { background: var(--leaf); color: var(--leaf-ink); }
+.aisle-pick li.current .name::after { content: " · now"; color: var(--muted); font-weight: 500; }
 
 .linkbtn { font: 600 .9rem var(--font-body); color: var(--tomato); background: none; border: 0; cursor: pointer; padding: 8px 0; }
 .out { flex: none; font: 700 .9rem var(--font-body); color: var(--tomato); background: transparent; border: 1.5px solid var(--line); border-radius: 999px; padding: 7px 14px; margin-right: 4px; cursor: pointer; }
@@ -300,9 +310,12 @@ function demoStore() {
   const emit = () => cb([...docs].map(([id, d]) => ({ id, ...d })));
   const mem = ["you@example.com"];
   let meals, mealCb = () => {};
+  const aisleMem = {}; let aisleCb = () => {};
   return {
     subscribeMeals(f) { mealCb = f; f(meals); },
     async saveMeals(m) { meals = m; mealCb(meals); },
+    subscribeAisles(f) { aisleCb = f; f({ ...aisleMem }); },
+    async rememberAisle(k, a) { if (a) aisleMem[k] = a; else delete aisleMem[k]; aisleCb({ ...aisleMem }); },
     demo: true, me: { uid: "me", name: "You", email: "you@example.com" },
     subscribe(f) { cb = f; emit(); },
     async create(d) { const id = "d" + (++n); docs.set(id, d); emit(); return id; },
@@ -359,6 +372,9 @@ async function firebaseStore(config, showGate) {
     // Meals live on the list document itself, so both partners share them.
     subscribeMeals(f) { F.onSnapshot(listRef, (s) => f(s.data()?.meals)); },
     saveMeals: (m) => F.updateDoc(listRef, { meals: m }),
+    // Learned categories ("aisleMemory": item key → category) also live on the list, shared by both partners.
+    subscribeAisles(f) { F.onSnapshot(listRef, (s) => f(s.data()?.aisleMemory || {})); },
+    rememberAisle: (k, a) => F.updateDoc(listRef, new F.FieldPath("aisleMemory", k), a || F.deleteField()),
     subscribe(f, onErr) { F.onSnapshot(items, (s) => f(s.docs.map((d) => ({ id: d.id, ...d.data() }))), onErr); },
     async create(d) { const ref = F.doc(items); await F.setDoc(ref, d); return ref.id; },
     update: (id, p) => F.updateDoc(F.doc(items, id), p),
@@ -408,6 +424,11 @@ function showGate(auth, A) {
 /* ---------- app ---------- */
 // Every item is either on the shopping list (bought: false) or in the house (bought: true).
 let store, items = [], tab = "list";
+// Categories you've dragged items to. They win over the built-in rules next time you add the same item.
+let aisleMemory = {};
+const learned = (name) => { const a = aisleMemory[keyOf(name)]; return AISLES.includes(a) ? a : null; };
+const aisleOf = (name) => learned(name) || aisleFor(name);
+const learnedPatch = (name) => { const a = learned(name); return a ? { aisle: a } : {}; };
 const list = $("list");
 
 function setTab(t) {
@@ -496,9 +517,9 @@ async function addParts(parts, stack = false) {
       write(store.update(existing.id, { qty }));
       names.push(existing.name); continue;
     }
-    if (existing) { write(store.update(existing.id, { ...unbought, ...stamp("added"), qty: 1 })); names.push(existing.name); continue; }
+    if (existing) { write(store.update(existing.id, { ...unbought, ...stamp("added"), qty: 1, ...learnedPatch(existing.name) })); names.push(existing.name); continue; }
     const name = cap(p);
-    const id = await store.create({ name, aisle: aisleFor(name), ...stamp("added"), ...unbought }).catch(() => null);
+    const id = await store.create({ name, aisle: aisleOf(name), ...stamp("added"), ...unbought }).catch(() => null);
     if (id) { added.push(id); names.push(name); }
   }
   return { added, dupes, names, bumped };
@@ -552,8 +573,8 @@ function askOut(it) {
 }
 $("out-yes").onclick = () => {
   const it = outItem; $("out-dlg").close(); if (!it) return;
-  write(store.update(it.id, { ...unbought, ...stamp("added"), qty: 1 }));
-  toast(`${it.name} is back on the shopping list`, () => write(store.update(it.id, { bought: true, boughtAt: it.boughtAt, boughtBy: it.boughtBy, boughtByName: it.boughtByName || null, qty: it.qty || 1 })));
+  write(store.update(it.id, { ...unbought, ...stamp("added"), qty: 1, ...learnedPatch(it.name) }));
+  toast(`${it.name} is back on the shopping list`, () => write(store.update(it.id, { bought: true, boughtAt: it.boughtAt, boughtBy: it.boughtBy, boughtByName: it.boughtByName || null, qty: it.qty || 1, aisle: it.aisle || "Other" })));
 };
 $("out-no").onclick = () => { const it = outItem; $("out-dlg").close(); if (it) removeItem(it); };
 
@@ -577,15 +598,149 @@ function metaEl(prefix, uid, name, t) {
 }
 
 function listRow(it) {
-  return el("li", { class: it.checked ? "bought" : "" },
+  const li = el("li", { class: it.checked ? "bought" : "" },
     el("button", { type: "button", class: "check", innerHTML: CHECK, onclick: () => checkOff(it), "aria-label": (it.checked ? "Uncheck: " : "Check off: ") + it.name }),
     el("div", { class: "label", onclick: () => checkOff(it) }, nameEl(it), metaEl("Added", it.addedBy, it.addedByName, it.addedAt)),
     el("button", { type: "button", class: "x", onclick: () => removeItem(it), "aria-label": "Remove " + it.name }, "×"));
+  li.append(gripEl(it, li));
+  return li;
 }
 function houseRow(it) {
-  return el("li", {},
+  const li = el("li", {},
     el("div", { class: "label" }, nameEl(it), metaEl("Bought", it.boughtBy, it.boughtByName, it.boughtAt)),
     el("button", { type: "button", class: "out", onclick: () => askOut(it), "aria-label": "Out of " + it.name }, "Out"));
+  li.append(gripEl(it, li));
+  return li;
+}
+
+/* ---------- categories: drag an item to another one ---------- */
+const GRIP = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></svg>';
+const aisleNow = (it) => (AISLES.includes(it.aisle) ? it.aisle : "Other");
+
+// Puts the item in the new category and remembers it for next time (for both partners).
+function moveToAisle(it, aisle) {
+  const from = aisleNow(it), k = keyOf(it.name);
+  if (aisle === from) return;
+  const prevMem = k ? aisleMemory[k] : undefined;
+  write(store.update(it.id, { aisle }));
+  if (k) { aisleMemory = { ...aisleMemory, [k]: aisle }; write(store.rememberAisle(k, aisle)); }
+  toast(`${it.name} moved to ${aisle}. It'll go there next time too.`, () => {
+    write(store.update(it.id, { aisle: from }));
+    if (k) {
+      const m = { ...aisleMemory }; if (prevMem) m[k] = prevMem; else delete m[k];
+      aisleMemory = m; write(store.rememberAisle(k, prevMem || null));
+    }
+  });
+}
+
+// Tapping the handle (instead of dragging) opens a simple category picker.
+function openAislePicker(it) {
+  const cur = aisleNow(it);
+  show(
+    el("h2", {}, it.name),
+    el("p", { class: "hint" }, "Pick a category. Next time you add it, it goes there automatically."),
+    el("ul", { class: "items aisle-pick" }, ...AISLES.map((a) => el("li", { class: a === cur ? "current" : "" },
+      el("div", { class: "label", tabIndex: 0, role: "button", onclick: () => { mealDlg.close(); moveToAisle(it, a); },
+        onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
+        el("div", { class: "name" }, a))))),
+    foot(el("span"), closeBtn()),
+  );
+}
+
+let drag = null, renderLater = false, swallowClick = 0;
+function gripEl(it, li) {
+  const b = el("button", { type: "button", class: "grip", innerHTML: GRIP, "aria-label": "Move " + it.name + " to another category",
+    onclick: () => { if (Date.now() - swallowClick > 400) openAislePicker(it); } });
+  b.addEventListener("pointerdown", (e) => startDrag(e, it, li));
+  return b;
+}
+
+function startDrag(e, it, li) {
+  if (drag || (e.pointerType === "mouse" && e.button !== 0)) return;
+  drag = { it, li, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY, live: false, target: null, raf: 0, pid: e.pointerId };
+  window.addEventListener("pointermove", onDragMove, { passive: false });
+  window.addEventListener("pointerup", endDrag);
+  window.addEventListener("pointercancel", endDrag);
+}
+
+// Shows every category as a drop target, including empty ones.
+function addDropPlaceholders() {
+  const shownSecs = [...list.querySelectorAll("section.aisle")];
+  const tail = list.querySelector(".bought-bar");
+  AISLES.forEach((a, i) => {
+    if (shownSecs.some((s) => s.dataset.aisle === a)) return;
+    const next = shownSecs.find((s) => AISLES.indexOf(s.dataset.aisle) > i) || tail || null;
+    const sec = el("section", { class: "aisle drop-empty" }, el("div", { class: "sign" }, a), el("div", { class: "drop-box" }, "Drop here"));
+    sec.dataset.aisle = a;
+    list.insertBefore(sec, next);
+  });
+}
+
+function goLive() {
+  const { li } = drag, r = li.getBoundingClientRect();
+  const ghost = li.cloneNode(true);
+  ghost.className = "drag-ghost";
+  Object.assign(ghost.style, { left: r.left + "px", width: r.width + "px", top: r.top + "px" });
+  document.body.append(ghost);
+  li.classList.add("dragging");
+  document.body.classList.add("is-dragging");
+  drag.ghost = ghost; drag.offY = drag.startY - r.top; drag.live = true;
+  addDropPlaceholders();
+  if (navigator.vibrate) navigator.vibrate(10);
+  const tick = () => { if (!drag) return; autoScroll(); placeGhost(); drag.raf = requestAnimationFrame(tick); };
+  drag.raf = requestAnimationFrame(tick);
+}
+
+function onDragMove(e) {
+  if (!drag || e.pointerId !== drag.pid) return;
+  drag.x = e.clientX; drag.y = e.clientY;
+  if (!drag.live) {
+    if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 6) return;
+    goLive();
+  }
+  e.preventDefault();
+}
+
+function placeGhost() {
+  drag.ghost.style.top = (drag.y - drag.offY) + "px";
+  // The category closest to the finger is the drop target.
+  let best = null, bestD = Infinity;
+  for (const s of list.querySelectorAll("section.aisle")) {
+    const r = s.getBoundingClientRect();
+    const d = drag.y < r.top ? r.top - drag.y : drag.y > r.bottom ? drag.y - r.bottom : 0;
+    if (d < bestD) { bestD = d; best = s; }
+  }
+  if (best !== drag.target) {
+    drag.target?.classList.remove("over");
+    best?.classList.add("over");
+    drag.target = best;
+  }
+}
+
+function autoScroll() {
+  const top = document.querySelector("header.top").getBoundingClientRect().bottom;
+  const zone = 70, y = drag.y;
+  let v = 0;
+  if (y < top + zone) v = -Math.ceil(((top + zone - y) / zone) * 14);
+  else if (y > innerHeight - zone) v = Math.ceil(((y - (innerHeight - zone)) / zone) * 14);
+  if (v) window.scrollBy(0, v);
+}
+
+function endDrag(e) {
+  if (!drag || (e && e.pointerId !== drag.pid)) return;
+  const d = drag; drag = null;
+  window.removeEventListener("pointermove", onDragMove);
+  window.removeEventListener("pointerup", endDrag);
+  window.removeEventListener("pointercancel", endDrag);
+  if (!d.live) { if (renderLater) { renderLater = false; render(); } return; } // just a tap: the click opens the picker
+  swallowClick = Date.now();
+  cancelAnimationFrame(d.raf);
+  d.ghost.remove();
+  document.body.classList.remove("is-dragging");
+  const target = e?.type === "pointerup" ? d.target?.dataset.aisle : null;
+  render();
+  renderLater = false;
+  if (target) moveToAisle(d.it, target);
 }
 
 function empty(title, text, eg) {
@@ -593,6 +748,7 @@ function empty(title, text, eg) {
 }
 
 function render() {
+  if (drag) { renderLater = true; return; } // don't rebuild the list under your finger
   const open = items.filter((i) => !i.bought);
   const house = items.filter((i) => i.bought);
   const toGet = open.filter((i) => !i.checked).length, ticked = open.length - toGet;
@@ -606,18 +762,20 @@ function render() {
   }
   let n = 0;
   for (const aisle of AISLES) {
-    const inAisle = shown.filter((i) => (AISLES.includes(i.aisle) ? i.aisle : "Other") === aisle)
+    const inAisle = shown.filter((i) => aisleNow(i) === aisle)
       .sort((a, b) => tab === "list" ? a.addedAt - b.addedAt : a.name.localeCompare(b.name));
     if (!inAisle.length) continue;
     n++;
     const sign = el("div", { class: "sign" }, el("span", { class: "no" }, String(n)), aisle);
     const ul = el("ul", { class: "items" + (tab === "house" ? " house" : "") }, ...inAisle.map(tab === "list" ? listRow : houseRow));
-    list.append(el("section", { class: "aisle" }, sign, ul));
+    const sec = el("section", { class: "aisle" }, sign, ul);
+    sec.dataset.aisle = aisle;
+    list.append(sec);
   }
   if (tab === "list") list.append(el("div", { class: "bought-bar" },
     el("button", { type: "button", class: "btn", disabled: !ticked, onclick: moveBought },
       ticked ? `Bought · move ${ticked} to In the house` : "Bought"),
-    ticked ? null : el("p", { class: "hint" }, "Tick items off while you shop, then tap Bought.")));
+    ticked ? null : el("p", { class: "hint" }, "Tick items off while you shop, then tap Bought. Wrong category? Drag the dots next to an item.")));
 }
 
 /* ---------- meals ---------- */
@@ -793,6 +951,7 @@ async function start() {
   setTab(saved === "house" ? "house" : "list");
   store.subscribe((docs) => { items = docs; render(); },
     () => notice("Lost the live connection to the list. Reload the app to reconnect."));
+  store.subscribeAisles((m) => { aisleMemory = m || {}; });
   renderMeals();
   store.subscribeMeals((m) => {
     if (m === undefined && !seeded) { seeded = true; saveMeals(DEFAULT_MEALS); return; }
